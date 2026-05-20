@@ -1,0 +1,73 @@
+{
+  "rooms": {
+    "room_0_0": {
+      "neighbors": {
+        "east": "room_1_0",
+        "south": "room_0_1"
+      },
+      "tiles": []
+    },
+    "room_1_0": {
+      "neighbors": {
+        "west": "room_0_0",
+        "east": "room_2_0",
+        "south": "room_1_1"
+      },
+      "tiles": []
+    },
+    "room_2_0": {
+      "neighbors": {
+        "west": "room_1_0",
+        "south": "room_2_1"
+      },
+      "tiles": []
+    },
+    "room_0_1": {
+      "neighbors": {
+        "north": "room_0_0",
+        "east": "room_1_1",
+        "south": "room_0_2"
+      },
+      "tiles": []
+    },
+    "room_1_1": {
+      "neighbors": {
+        "north": "room_1_0",
+        "west": "room_0_1",
+        "east": "room_2_1",
+        "south": "room_1_2"
+      },
+      "tiles": []
+    },
+    "room_2_1": {
+      "neighbors": {
+        "north": "room_2_0",
+        "west": "room_1_1",
+        "south": "room_2_2"
+      },
+      "tiles": []
+    },
+    "room_0_2": {
+      "neighbors": {
+        "north": "room_0_1",
+        "east": "room_1_2"
+      },
+      "tiles": []
+    },
+    "room_1_2": {
+      "neighbors": {
+        "north": "room_1_1",
+        "west": "room_0_2",
+        "east": "room_2_2"
+      },
+      "tiles": []
+    },
+    "room_2_2": {
+      "neighbors": {
+        "north": "room_2_1",
+        "west": "room_1_2"
+      },
+      "tiles": []
+    }
+  }
+}

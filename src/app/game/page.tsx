@@ -91,6 +91,28 @@ export default function GamePage() {
             ))}
           </div>
         </div>
+        <aside className="space-y-5 rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_18px_40px_rgba(0,0,0,0.08)]">
+            <div className="flex items-center justify-between gap-3">
+              <span className="rounded-full border border-amber-100/15 bg-amber-100/5 px-4 py-1 text-sm tracking-[0.2em] text-[var(--accent)]">
+                操作方法
+              </span>
+              <span className="text-sm text-stone-400">ゲームを始める前に</span>
+            </div>
+            <ul className="space-y-3 text-sm leading-7 text-stone-300">
+              <li>
+                <span className="font-semibold text-[var(--foreground)]">移動:</span> WASD / ←↑↓→
+              </li>
+              <li>
+                <span className="font-semibold text-[var(--foreground)]">決定:</span> Enter / Z
+              </li>
+              <li>
+                <span className="font-semibold text-[var(--foreground)]">キャンセル:</span> Esc / X
+              </li>
+              <li>
+                <span className="font-semibold text-[var(--foreground)]">メニュー:</span> M
+              </li>
+            </ul>
+          </aside>
       </section>
     </main>
   );

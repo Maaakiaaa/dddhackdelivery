@@ -60,8 +60,7 @@ export default function GamePage() {
                 DUNGEON DELIVERY
               </p>
               <h1 className="max-w-4xl text-5xl font-semibold leading-tight text-[var(--foreground)] sm:text-6xl lg:text-5xl">
-                配達ミッション
-                <span className="block text-[var(--accent)]">を完遂せよ</span>
+                ストーリー
               </h1>
               <p className="max-w-2xl text-base leading-8 text-stone-300 sm:text-lg">
                 ダンジョンの奥へ進み、秘密の荷物を回収して脱出する冒険。

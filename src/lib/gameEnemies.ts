@@ -19,6 +19,8 @@ export type Enemy = {
   direction: -1 | 1;
   width: number;
   height: number;
+  damage?: number;
+  spriteSrc?: string;
 };
 
 const PLAYER_HITBOX = {
@@ -38,6 +40,21 @@ const BASE_ENEMIES: Enemy[] = [
     direction: 1,
     width: 3.6,
     height: 4.8,
+    damage: 30,
+  },
+  {
+    id: "enemy-1-1-flyer",
+    screen: { row: 1, col: 1 },
+    x: 70,
+    y: 15,
+    minX: 16,
+    maxX: 78,
+    speed: 9,
+    direction: -1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    spriteSrc:"/flying_donkey_left.png",
   },
   {
     id: "enemy-2-1-left",
@@ -50,6 +67,7 @@ const BASE_ENEMIES: Enemy[] = [
     direction: -1,
     width: 3.6,
     height: 4.8,
+    damage: 30,
   },
   {
     id: "enemy-3-2-floor",
@@ -99,6 +117,30 @@ export function getEnemiesForScreen(
   return enemies.filter((enemy) => isSameScreen(enemy.screen, screen));
 }
 
+export function getCollidingEnemy(
+  player: EnemyPoint,
+  enemies: Enemy[],
+  screen: EnemyScreenPosition,
+) {
+  const playerRect = {
+    left: player.x - PLAYER_HITBOX.width / 2,
+    right: player.x + PLAYER_HITBOX.width / 2,
+    top: player.y - PLAYER_HITBOX.height,
+    bottom: player.y,
+  };
+
+  return getEnemiesForScreen(enemies, screen).find((enemy) => {
+    const enemyRect = {
+      left: enemy.x - enemy.width / 2,
+      right: enemy.x + enemy.width / 2,
+      top: enemy.y - enemy.height,
+      bottom: enemy.y,
+    };
+
+    return isOverlapping(playerRect, enemyRect);
+  });
+}
+
 export function updateEnemies(enemies: Enemy[], deltaSeconds: number) {
   return enemies.map((enemy) => {
     let nextX = enemy.x + enemy.direction * enemy.speed * deltaSeconds;
@@ -125,21 +167,5 @@ export function isPlayerTouchingEnemy(
   enemies: Enemy[],
   screen: EnemyScreenPosition,
 ) {
-  const playerRect = {
-    left: player.x - PLAYER_HITBOX.width / 2,
-    right: player.x + PLAYER_HITBOX.width / 2,
-    top: player.y - PLAYER_HITBOX.height,
-    bottom: player.y,
-  };
-
-  return getEnemiesForScreen(enemies, screen).some((enemy) => {
-    const enemyRect = {
-      left: enemy.x - enemy.width / 2,
-      right: enemy.x + enemy.width / 2,
-      top: enemy.y - enemy.height,
-      bottom: enemy.y,
-    };
-
-    return isOverlapping(playerRect, enemyRect);
-  });
+  return Boolean(getCollidingEnemy(player, enemies, screen));
 }

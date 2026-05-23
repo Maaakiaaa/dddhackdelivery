@@ -5,10 +5,20 @@ import { useEffect, useRef, useState } from "react";
 import {
   getEnemiesForScreen,
   getInitialEnemies,
-  isPlayerTouchingEnemy,
+  getCollidingEnemy,
   updateEnemies,
   type Enemy,
 } from "@/lib/gameEnemies";
+import {
+  findLandingPlatform,
+  findPlatformTopAtPoint,
+  getActivePlatforms,
+  getPlatformBlockCount,
+  getPlatformImageSrc,
+  getPlatformTop,
+  getPlatformVisualTop,
+  START_PLATFORM,
+} from "@/lib/gamePlatforms";
 
 type Point = {
   x: number;
@@ -26,7 +36,6 @@ const LADDER_CLIMB_SPEED = 24;
 const JUMP_VELOCITY = -100;
 const GRAVITY = 150;
 const MAX_FALL_SPEED = 56;
-const PLATFORM_SURFACE_OFFSET = 4.0;
 const SCREEN_TRANSITION_HOLD_SECONDS = 0.6;
 const STAGE_BOUNDS = {
   minX: 4,
@@ -42,56 +51,6 @@ const LADDER_Y_RANGE = {
   min: 0,
   max: 34,
 };
-const BOTTOM_FLOOR_VISUAL_OFFSET = 2;
-
-const platforms = [
-  { label: "開始地点", x: 13, y: 68, size: 4, blocks: 3 },
-  { label: "中央足場", x: 39, y: 51, size: 3.6, blocks: 3 },
-  { label: "岩棚", x: 57, y: 55, size: 3.6, blocks: 3 },
-  { label: "配達先", x: 69, y: 68, size: 4, blocks: 3 },
-  { label: "上層通路", x: 82, y: 33, size: 3.6, blocks: 3 },
-] as const;
-
-const block2Platforms = [
-  { label: "長い足場A", x: 31, y: 82, size: 4, blocks: 6, imageSrc: "/block2.png" },
-  { label: "長い足場B", x: 76, y: 48, size: 4, blocks: 6, imageSrc: "/block2.png" },
-] as const;
-
-const ladderBasePlatforms = [
-  { label: "はしご下足場", x: 90, y: 100, size: 4, blocks: 3 },
-] as const;
-
-const secondRowPlatforms = [
-  { label: "2段目左足場", x: 13, y: 48, size: 4, blocks: 3 },
-  { label: "2段目中央足場", x: 43, y: 70, size: 4, blocks: 4 },
-  { label: "2段目右足場", x: 78, y: 56, size: 4, blocks: 3 },
-  {
-    label: "2段目長い足場",
-    x: 58,
-    y: 86,
-    size: 4,
-    blocks: 6,
-    imageSrc: "/block2.png",
-  },
-] as const;
-
-const bottomFloorPlatforms = Array.from({ length: 24 }, (_, index) => ({
-  label: `下端ブロック${index + 1}`,
-  x: 2 + index * 4,
-  y: 100,
-  size: 4,
-}));
-
-type Platform = {
-  label: string;
-  x: number;
-  y: number;
-  size: number;
-  blocks?: number;
-  imageSrc?: string;
-};
-
-const START_PLATFORM = platforms[0];
 const START_POSITION: Point = {
   x: START_PLATFORM.x,
   y: getPlatformTop(START_PLATFORM),
@@ -134,82 +93,6 @@ function isOnLadder(point: Point, screen: ScreenPosition) {
     point.y >= LADDER_Y_RANGE.min &&
     point.y <= LADDER_Y_RANGE.max
   );
-}
-
-function getPlatformTop(platform: Platform) {
-  return platform.y - platform.size / 2 - PLATFORM_SURFACE_OFFSET;
-}
-
-function getPlatformBlockCount(platform: Platform) {
-  return platform.blocks ?? 1;
-}
-
-function getPlatformImageSrc(platform: Platform) {
-  return platform.imageSrc ?? "/block.png";
-}
-
-function getPlatformVisualTop(platform: Platform) {
-  return platform.label.startsWith("下端ブロック")
-    ? platform.y + BOTTOM_FLOOR_VISUAL_OFFSET
-    : platform.y;
-}
-
-function getPlatformLeft(platform: Platform) {
-  return platform.x - (platform.size * getPlatformBlockCount(platform)) / 2;
-}
-
-function getPlatformRight(platform: Platform) {
-  return platform.x + (platform.size * getPlatformBlockCount(platform)) / 2;
-}
-
-function getActivePlatforms(screen: ScreenPosition) {
-  if (isGoalScreen(screen)) {
-    return [];
-  }
-
-  if (screen.row === 2) {
-    return [...secondRowPlatforms, ...ladderBasePlatforms];
-  }
-
-  return screen.row === 3
-    ? [
-        ...platforms,
-        ...block2Platforms,
-        ...bottomFloorPlatforms,
-      ]
-    : [...platforms, ...block2Platforms, ...ladderBasePlatforms];
-}
-
-function findPlatformTopAtPoint(point: Point, activePlatforms: Platform[]) {
-  return activePlatforms.find((platform) => {
-    const isOnTopEdge = Math.abs(point.y - getPlatformTop(platform)) < 0.4;
-
-    return (
-      isOnTopEdge &&
-      point.x >= getPlatformLeft(platform) &&
-      point.x <= getPlatformRight(platform)
-    );
-  });
-}
-
-function findLandingPlatform(
-  x: number,
-  fromY: number,
-  toY: number,
-  activePlatforms: Platform[],
-) {
-  return activePlatforms
-    .filter((platform) => {
-      const platformTop = getPlatformTop(platform);
-
-      return (
-        x >= getPlatformLeft(platform) &&
-        x <= getPlatformRight(platform) &&
-        platformTop >= fromY &&
-        platformTop <= toY
-      );
-    })
-    .sort((a, b) => getPlatformTop(a) - getPlatformTop(b))[0];
 }
 
 function isMovementKey(key: string) {
@@ -511,14 +394,16 @@ export default function GameScreen() {
       playerRef.current = nextPlayer;
       setPlayer(nextPlayer);
 
-      const contact = isPlayerTouchingEnemy(
+      const collidingEnemy = getCollidingEnemy(
         nextPlayer,
         enemiesRef.current,
         screenRef.current,
       );
+      const contact = Boolean(collidingEnemy);
 
-      if (contact && !enemyContactRef.current) {
-        const nextHP = Math.max(playerHPRef.current - 30, 0);
+      if (contact && !enemyContactRef.current && collidingEnemy) {
+        const damage = collidingEnemy.damage ?? 30;
+        const nextHP = Math.max(playerHPRef.current - damage, 0);
         playerHPRef.current = nextHP;
         setPlayerHP(nextHP);
 
@@ -659,7 +544,7 @@ export default function GameScreen() {
           >
             <div className="relative h-full w-full overflow-hidden rounded-[35%_35%_18%_18%] border border-red-200/35 bg-black/0">
               <Image
-                src="/dog_right.png"
+                src={enemy.spriteSrc ?? "/dog_right.png"}
                 alt="敵"
                 fill
                 sizes="(min-width: 1024px) 5rem, 12vw"

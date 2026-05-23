@@ -1,7 +1,4 @@
-export type PlatformScreenPosition = {
-  row: number;
-  col: number;
-};
+import { isGoalScreen, type ScreenPosition } from "@/lib/gameMap";
 
 export type Platform = {
   label: string;
@@ -29,6 +26,7 @@ type PlatformInput = {
 
 const PLATFORM_SURFACE_OFFSET = 4.0;
 const BOTTOM_FLOOR_VISUAL_OFFSET = 2;
+const PLATFORMLESS_ROWS = [4];
 
 function createPlatform(platform: PlatformInput): Platform {
   return {
@@ -53,8 +51,7 @@ const platforms = [
     y: 68,
     size: 4,
     blocks: 3,
-    screenRows: [1, 3],
-    screenCols: [1, 2, 3],
+    screenRows: [1, 3, 5],
   }),
   createPlatform({
     label: "center-platform",
@@ -62,8 +59,7 @@ const platforms = [
     y: 51,
     size: 3.6,
     blocks: 3,
-    screenRows: [1, 3],
-    screenCols: [1, 2, 3],
+    screenRows: [1, 3, 5],
   }),
   createPlatform({
     label: "middle-rock-platform",
@@ -71,8 +67,7 @@ const platforms = [
     y: 55,
     size: 3.6,
     blocks: 3,
-    screenRows: [1, 3],
-    screenCols: [1, 2, 3],
+    screenRows: [1, 3, 5],
   }),
   createPlatform({
     label: "right-platform",
@@ -80,8 +75,7 @@ const platforms = [
     y: 68,
     size: 4,
     blocks: 3,
-    screenRows: [1, 3],
-    screenCols: [1, 2, 3],
+    screenRows: [1, 3, 5],
   }),
   createPlatform({
     label: "upper-right-platform",
@@ -89,8 +83,7 @@ const platforms = [
     y: 33,
     size: 3.6,
     blocks: 3,
-    screenRows: [1, 3],
-    screenCols: [1, 2, 3],
+    screenRows: [1, 3, 5],
   }),
   createPlatform({
     label: "long-platform-a",
@@ -99,8 +92,7 @@ const platforms = [
     size: 4,
     blocks: 6,
     imageSrc: "/block2.png",
-    screenRows: [1, 3],
-    screenCols: [1, 2, 3],
+    screenRows: [1, 3, 5],
   }),
   createPlatform({
     label: "long-platform-b",
@@ -109,8 +101,7 @@ const platforms = [
     size: 4,
     blocks: 6,
     imageSrc: "/block2.png",
-    screenRows: [1, 3],
-    screenCols: [1, 2, 3],
+    screenRows: [1, 3, 5],
   }),
   createPlatform({
     label: "ladder-base-platform",
@@ -165,17 +156,12 @@ const platforms = [
       y: 100,
       size: 4,
       visualOffsetY: BOTTOM_FLOOR_VISUAL_OFFSET,
-      screenRows: [3],
-      screenCols: [1, 2, 3],
+      screenRows: [5],
     }),
   ),
 ];
 
 export const START_PLATFORM = platforms[0];
-
-function isGoalScreen(screen: PlatformScreenPosition) {
-  return screen.row === 3 && screen.col === 4;
-}
 
 export function getPlatformTop(platform: Platform) {
   return platform.y - platform.size / 2 - PLATFORM_SURFACE_OFFSET;
@@ -201,8 +187,8 @@ export function getPlatformRight(platform: Platform) {
   return platform.x + (platform.size * getPlatformBlockCount(platform)) / 2;
 }
 
-export function getActivePlatforms(screen: PlatformScreenPosition) {
-  if (isGoalScreen(screen)) {
+export function getActivePlatforms(screen: ScreenPosition) {
+  if (isGoalScreen(screen) || PLATFORMLESS_ROWS.includes(screen.row)) {
     return [];
   }
 

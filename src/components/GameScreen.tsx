@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import GameTimer from "@/components/GameTimer";
 import {
   getEnemiesForScreen,
   getInitialEnemies,
@@ -9,6 +10,19 @@ import {
   updateEnemies,
   type Enemy,
 } from "@/lib/gameEnemies";
+import {
+  getMaxRow,
+  getMinRow,
+  getRoomBackground,
+  getScreenBelow,
+  getScreenLeft,
+  getScreenRight,
+  isOnLadder,
+  LADDER_Y_RANGE,
+  shouldShowLadder,
+  START_SCREEN,
+  type ScreenPosition,
+} from "@/lib/gameMap";
 import {
   findLandingPlatform,
   findPlatformTopAtPoint,
@@ -26,10 +40,6 @@ type Point = {
 };
 
 type Direction = "left" | "right";
-type ScreenPosition = {
-  row: number;
-  col: number;
-};
 
 type Bullet = {
   id: string;
@@ -65,175 +75,15 @@ const STAGE_BOUNDS = {
   topY: 4,
   bottomY: 95,
 };
-const LADDER_X_RANGE = {
-  min: 84,
-  max: 96,
-};
-const LADDER_Y_RANGE = {
-  min: 0,
-  max: 34,
-};
 const START_POSITION: Point = {
   x: START_PLATFORM.x,
   y: getPlatformTop(START_PLATFORM),
 };
-const START_SCREEN: ScreenPosition = { row: 1, col: 1 };
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-function isGoalScreen(screen: ScreenPosition) {
-  return screen.row === 3 && screen.col === 4;
-}
-
-function getMaxColForRow(row: number) {
-  return row === 3 ? 4 : 3;
-}
-
-function getRoomBackground(screen: ScreenPosition) {
-  return isGoalScreen(screen)
-    ? {
-        alt: "溶岩の光が差し込むゴールの洞窟",
-        src: "/goal.png",
-      }
-    : {
-        alt: "青く光る結晶がある洞窟の背景",
-        src: "/map.png",
-      };
-}
-
-function shouldShowLadder(screen: ScreenPosition) {
-  return screen.row >= 2 && screen.row <= 3 && screen.col <= 3;
-}
-
-function isOnLadder(point: Point, screen: ScreenPosition) {
-  return (
-    shouldShowLadder(screen) &&
-    point.x >= LADDER_X_RANGE.min &&
-    point.x <= LADDER_X_RANGE.max &&
-    point.y >= LADDER_Y_RANGE.min &&
-    point.y <= LADDER_Y_RANGE.max
-  );
-}
-
-function getPlatformTop(platform: Platform) {
-  return platform.y - platform.size / 2 - PLATFORM_SURFACE_OFFSET;
-}
-
-function getPlatformBlockCount(platform: Platform) {
-  return platform.blocks ?? 1;
-}
-
-function getPlatformImageSrc(platform: Platform) {
-  return platform.imageSrc ?? "/block.png";
-}
-
-function getPlatformVisualTop(platform: Platform) {
-  return platform.label.startsWith("下端ブロック")
-    ? platform.y + BOTTOM_FLOOR_VISUAL_OFFSET
-    : platform.y;
-}
-
-function getPlatformLeft(platform: Platform) {
-  return platform.x - (platform.size * getPlatformBlockCount(platform)) / 2;
-}
-
-function getPlatformRight(platform: Platform) {
-  return platform.x + (platform.size * getPlatformBlockCount(platform)) / 2;
-}
-
-function getChasingEnemy(
-  enemy: Enemy,
-  player: Point,
-  activePlatforms: Platform[],
-  deltaSeconds: number,
-) {
-  const targetX = clamp(player.x, enemy.minX, enemy.maxX);
-  const dx = clamp(targetX - enemy.x, -1, 1);
-  const dy = clamp(player.y - enemy.y, -1, 1);
-  const nextX = clamp(
-    enemy.x + dx * enemy.speed * deltaSeconds,
-    enemy.minX,
-    enemy.maxX,
-  );
-  const nextYUnclamped = enemy.y + dy * enemy.speed * deltaSeconds;
-  const nextXRange = {
-    left: nextX - enemy.width / 2,
-    right: nextX + enemy.width / 2,
-  };
-
-  const overlappingPlatforms = activePlatforms.filter((platform) => {
-    const left = getPlatformLeft(platform) - enemy.width / 2;
-    const right = getPlatformRight(platform) + enemy.width / 2;
-
-    return nextXRange.right >= left && nextXRange.left <= right;
-  });
-
-  const maxPlatformY = overlappingPlatforms.length
-    ? Math.min(...overlappingPlatforms.map(getPlatformTop)) - 0.5
-    : STAGE_BOUNDS.bottomY;
-  const minEnemyY = Math.max(enemy.height, STAGE_BOUNDS.topY + 1);
-  const nextY = clamp(nextYUnclamped, minEnemyY, maxPlatformY);
-  const nextDirection = nextX < enemy.x ? -1 : nextX > enemy.x ? 1 : enemy.direction;
-
-  return {
-    ...enemy,
-    x: nextX,
-    y: nextY,
-    direction: nextDirection,
-  };
-}
-
-function getActivePlatforms(screen: ScreenPosition) {
-  if (isGoalScreen(screen)) {
-    return [];
-  }
-
-  if (screen.row === 2) {
-    return [...secondRowPlatforms, ...ladderBasePlatforms];
-  }
-
-  return screen.row === 3
-    ? [
-        ...platforms,
-        ...block2Platforms,
-        ...bottomFloorPlatforms,
-      ]
-    : [...platforms, ...block2Platforms, ...ladderBasePlatforms];
-}
-
-function findPlatformTopAtPoint(point: Point, activePlatforms: Platform[]) {
-  return activePlatforms.find((platform) => {
-    const isOnTopEdge = Math.abs(point.y - getPlatformTop(platform)) < 0.4;
-
-    return (
-      isOnTopEdge &&
-      point.x >= getPlatformLeft(platform) &&
-      point.x <= getPlatformRight(platform)
-    );
-  });
-}
-
-function findLandingPlatform(
-  x: number,
-  fromY: number,
-  toY: number,
-  activePlatforms: Platform[],
-) {
-  return activePlatforms
-    .filter((platform) => {
-      const platformTop = getPlatformTop(platform);
-
-      return (
-        x >= getPlatformLeft(platform) &&
-        x <= getPlatformRight(platform) &&
-        platformTop >= fromY &&
-        platformTop <= toY
-      );
-    })
-    .sort((a, b) => getPlatformTop(a) - getPlatformTop(b))[0];
-}
 
 function isMovementKey(key: string) {
   return [
@@ -476,16 +326,9 @@ export default function GameScreen() {
 
       if (dx > 0 && rawNextX >= STAGE_BOUNDS.maxX) {
         const previousScreen = screenRef.current;
-        const nextScreen = {
-          row: previousScreen.row,
-          col: clamp(
-            previousScreen.col + 1,
-            1,
-            getMaxColForRow(previousScreen.row),
-          ),
-        };
+        const nextScreen = getScreenRight(previousScreen);
 
-        if (nextScreen.col !== previousScreen.col) {
+        if (nextScreen !== null) {
           nextX = STAGE_BOUNDS.minX;
           screenRef.current = nextScreen;
           screenTransitionHoldRef.current = SCREEN_TRANSITION_HOLD_SECONDS;
@@ -502,12 +345,9 @@ export default function GameScreen() {
 
       if (dx < 0 && rawNextX <= STAGE_BOUNDS.minX) {
         const previousScreen = screenRef.current;
-        const nextScreen = {
-          row: previousScreen.row,
-          col: clamp(previousScreen.col - 1, 1, getMaxColForRow(previousScreen.row)),
-        };
+        const nextScreen = getScreenLeft(previousScreen);
 
-        if (nextScreen.col !== previousScreen.col) {
+        if (nextScreen !== null) {
           nextX = STAGE_BOUNDS.maxX;
           screenRef.current = nextScreen;
           screenTransitionHoldRef.current = SCREEN_TRANSITION_HOLD_SECONDS;
@@ -548,7 +388,7 @@ export default function GameScreen() {
         if (climbY < 0 && nextY <= STAGE_BOUNDS.topY) {
           const previousScreen = screenRef.current;
           const nextScreen = {
-            row: clamp(previousScreen.row - 1, 1, 3),
+            row: clamp(previousScreen.row - 1, getMinRow(), getMaxRow()),
             col: previousScreen.col,
           };
 
@@ -587,28 +427,33 @@ export default function GameScreen() {
           isGroundedRef.current = true;
           setIsGrounded(true);
           setIsJumping(false);
-        } else if (nextY > STAGE_BOUNDS.bottomY) {
-          const previousScreen = screenRef.current;
-          const nextScreen = {
-            row: clamp(previousScreen.row + 1, 1, 3),
-            col: previousScreen.col,
-          };
-          screenRef.current = nextScreen;
-          setScreen(nextScreen);
+        } else {
+          const canMoveToScreenBelow = getScreenBelow(screenRef.current) !== null;
+          const bottomTransitionY =
+            activePlatforms.length === 0 && canMoveToScreenBelow
+              ? STAGE_BOUNDS.bottomY - 6
+              : STAGE_BOUNDS.bottomY;
 
-          if (nextScreen.row === previousScreen.row) {
-            nextY = STAGE_BOUNDS.bottomY;
-            verticalVelocityRef.current = 0;
-            isGroundedRef.current = true;
-            setIsGrounded(true);
-            setIsJumping(false);
-          } else {
-            nextY = 0;
-            verticalVelocityRef.current = MAX_FALL_SPEED;
-            isGroundedRef.current = false;
-            screenTransitionHoldRef.current = SCREEN_TRANSITION_HOLD_SECONDS;
-            setIsGrounded(false);
-            setIsJumping(false);
+          if (nextY >= bottomTransitionY) {
+            const previousScreen = screenRef.current;
+            const nextScreen = getScreenBelow(previousScreen);
+
+            if (nextScreen === null) {
+              nextY = STAGE_BOUNDS.bottomY;
+              verticalVelocityRef.current = 0;
+              isGroundedRef.current = true;
+              setIsGrounded(true);
+              setIsJumping(false);
+            } else {
+              screenRef.current = nextScreen;
+              setScreen(nextScreen);
+              nextY = 0;
+              verticalVelocityRef.current = MAX_FALL_SPEED;
+              isGroundedRef.current = false;
+              screenTransitionHoldRef.current = SCREEN_TRANSITION_HOLD_SECONDS;
+              setIsGrounded(false);
+              setIsJumping(false);
+            }
           }
         }
       }
@@ -713,6 +558,8 @@ export default function GameScreen() {
         />
 
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,transparent_36%,rgba(0,0,0,0.28)_100%)]" />
+
+        <GameTimer />
 
         <div className="absolute left-4 top-4 z-20 min-w-40 rounded-lg border border-white/10 bg-black/55 px-4 py-3 text-sm text-stone-100 shadow-[0_12px_32px_rgba(0,0,0,0.35)] backdrop-blur-sm">
           <p>位置: X {Math.round(player.x)} / Y {Math.round(player.y)}</p>

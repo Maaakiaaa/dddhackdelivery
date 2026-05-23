@@ -2,6 +2,13 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import {
+  getEnemiesForScreen,
+  getInitialEnemies,
+  isPlayerTouchingEnemy,
+  updateEnemies,
+  type Enemy,
+} from "@/lib/gameEnemies";
 
 type Point = {
   x: number;
@@ -240,9 +247,13 @@ export default function GameScreen() {
   const [isJumping, setIsJumping] = useState(false);
   const [isGrounded, setIsGrounded] = useState(true);
   const [screen, setScreen] = useState<ScreenPosition>(START_SCREEN);
+  const [enemies, setEnemies] = useState<Enemy[]>(() => getInitialEnemies());
+  const [isEnemyContact, setIsEnemyContact] = useState(false);
   const roomBackground = getRoomBackground(screen);
+  const visibleEnemies = getEnemiesForScreen(enemies, screen);
   const pressedKeysRef = useRef(new Set<string>());
   const playerRef = useRef<Point>(START_POSITION);
+  const enemiesRef = useRef<Enemy[]>(enemies);
   const verticalVelocityRef = useRef(0);
   const isGroundedRef = useRef(true);
   const screenRef = useRef<ScreenPosition>(START_SCREEN);
@@ -262,11 +273,14 @@ export default function GameScreen() {
         setIsMoving(false);
         setIsJumping(false);
         setIsGrounded(true);
+        setIsEnemyContact(false);
         screenRef.current = START_SCREEN;
         playerRef.current = START_POSITION;
+        enemiesRef.current = getInitialEnemies();
         setScreen(START_SCREEN);
         setFacing("right");
         setPlayer(START_POSITION);
+        setEnemies(enemiesRef.current);
         return;
       }
 
@@ -318,6 +332,9 @@ export default function GameScreen() {
         animationFrameId = requestAnimationFrame(tick);
         return;
       }
+
+      enemiesRef.current = updateEnemies(enemiesRef.current, deltaSeconds);
+      setEnemies(enemiesRef.current);
 
       const { climbY, dx } = getMovement(pressedKeysRef.current);
 
@@ -474,6 +491,9 @@ export default function GameScreen() {
       const nextPlayer = { x: nextX, y: nextY };
       playerRef.current = nextPlayer;
       setPlayer(nextPlayer);
+      setIsEnemyContact(
+        isPlayerTouchingEnemy(nextPlayer, enemiesRef.current, screenRef.current),
+      );
 
       animationFrameId = requestAnimationFrame(tick);
     }
@@ -588,9 +608,33 @@ export default function GameScreen() {
           ))}
         </div>
 
+        {visibleEnemies.map((enemy) => (
+          <div
+            key={enemy.id}
+            aria-hidden="true"
+            className="pointer-events-none absolute z-10 drop-shadow-[0_8px_10px_rgba(0,0,0,0.65)]"
+            style={{
+              left: `${enemy.x}%`,
+              top: `${enemy.y}%`,
+              width: `${enemy.width}%`,
+              height: `${enemy.height}%`,
+              transform: `translate(-50%, -100%) scaleX(${enemy.direction})`,
+            }}
+          >
+            <div className="relative h-full w-full overflow-hidden rounded-[35%_35%_18%_18%] border border-red-200/35 bg-[radial-gradient(circle_at_42%_30%,#fecaca_0_10%,#dc2626_24%,#7f1d1d_76%)]">
+              <span className="absolute left-[24%] top-[30%] h-[16%] w-[16%] rounded-full bg-white" />
+              <span className="absolute right-[24%] top-[30%] h-[16%] w-[16%] rounded-full bg-white" />
+              <span className="absolute left-[29%] top-[36%] h-[7%] w-[7%] rounded-full bg-black" />
+              <span className="absolute right-[29%] top-[36%] h-[7%] w-[7%] rounded-full bg-black" />
+            </div>
+          </div>
+        ))}
+
         <div
           aria-label="プレイヤー"
-          className="absolute z-10 h-[clamp(3.4rem,8vw,6.8rem)] w-[clamp(2.5rem,5.8vw,5rem)]"
+          className={`absolute z-10 h-[clamp(3.4rem,8vw,6.8rem)] w-[clamp(2.5rem,5.8vw,5rem)] ${
+            isEnemyContact ? "ring-4 ring-red-500/70" : ""
+          }`}
           data-testid="player"
           style={{
             left: `${player.x}%`,

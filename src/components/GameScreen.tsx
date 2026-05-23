@@ -31,7 +31,29 @@ type ScreenPosition = {
   col: number;
 };
 
+type Bullet = {
+  id: string;
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  speed: number;
+  damage: number;
+};
+
 const PLAYER_SPEED = 18;
+const BULLET_SPEED = 55;
+const BULLET_DAMAGE = 15;
+const BULLET_SIZE_PERCENT = 1.4;
+const PLAYER_HITBOX = {
+  width: 4.6,
+  height: 10,
+};
+const SHOOT_DIRECTION_VECTORS = [
+  { dx: 0.83, dy: -0.56 },
+  { dx: 1, dy: 0 },
+  { dx: 0.83, dy: 0.56 },
+] as const;
 const LADDER_CLIMB_SPEED = 24;
 const JUMP_VELOCITY = -100;
 const GRAVITY = 150;
@@ -95,6 +117,124 @@ function isOnLadder(point: Point, screen: ScreenPosition) {
   );
 }
 
+function getPlatformTop(platform: Platform) {
+  return platform.y - platform.size / 2 - PLATFORM_SURFACE_OFFSET;
+}
+
+function getPlatformBlockCount(platform: Platform) {
+  return platform.blocks ?? 1;
+}
+
+function getPlatformImageSrc(platform: Platform) {
+  return platform.imageSrc ?? "/block.png";
+}
+
+function getPlatformVisualTop(platform: Platform) {
+  return platform.label.startsWith("下端ブロック")
+    ? platform.y + BOTTOM_FLOOR_VISUAL_OFFSET
+    : platform.y;
+}
+
+function getPlatformLeft(platform: Platform) {
+  return platform.x - (platform.size * getPlatformBlockCount(platform)) / 2;
+}
+
+function getPlatformRight(platform: Platform) {
+  return platform.x + (platform.size * getPlatformBlockCount(platform)) / 2;
+}
+
+function getChasingEnemy(
+  enemy: Enemy,
+  player: Point,
+  activePlatforms: Platform[],
+  deltaSeconds: number,
+) {
+  const targetX = clamp(player.x, enemy.minX, enemy.maxX);
+  const dx = clamp(targetX - enemy.x, -1, 1);
+  const dy = clamp(player.y - enemy.y, -1, 1);
+  const nextX = clamp(
+    enemy.x + dx * enemy.speed * deltaSeconds,
+    enemy.minX,
+    enemy.maxX,
+  );
+  const nextYUnclamped = enemy.y + dy * enemy.speed * deltaSeconds;
+  const nextXRange = {
+    left: nextX - enemy.width / 2,
+    right: nextX + enemy.width / 2,
+  };
+
+  const overlappingPlatforms = activePlatforms.filter((platform) => {
+    const left = getPlatformLeft(platform) - enemy.width / 2;
+    const right = getPlatformRight(platform) + enemy.width / 2;
+
+    return nextXRange.right >= left && nextXRange.left <= right;
+  });
+
+  const maxPlatformY = overlappingPlatforms.length
+    ? Math.min(...overlappingPlatforms.map(getPlatformTop)) - 0.5
+    : STAGE_BOUNDS.bottomY;
+  const minEnemyY = Math.max(enemy.height, STAGE_BOUNDS.topY + 1);
+  const nextY = clamp(nextYUnclamped, minEnemyY, maxPlatformY);
+  const nextDirection = nextX < enemy.x ? -1 : nextX > enemy.x ? 1 : enemy.direction;
+
+  return {
+    ...enemy,
+    x: nextX,
+    y: nextY,
+    direction: nextDirection,
+  };
+}
+
+function getActivePlatforms(screen: ScreenPosition) {
+  if (isGoalScreen(screen)) {
+    return [];
+  }
+
+  if (screen.row === 2) {
+    return [...secondRowPlatforms, ...ladderBasePlatforms];
+  }
+
+  return screen.row === 3
+    ? [
+        ...platforms,
+        ...block2Platforms,
+        ...bottomFloorPlatforms,
+      ]
+    : [...platforms, ...block2Platforms, ...ladderBasePlatforms];
+}
+
+function findPlatformTopAtPoint(point: Point, activePlatforms: Platform[]) {
+  return activePlatforms.find((platform) => {
+    const isOnTopEdge = Math.abs(point.y - getPlatformTop(platform)) < 0.4;
+
+    return (
+      isOnTopEdge &&
+      point.x >= getPlatformLeft(platform) &&
+      point.x <= getPlatformRight(platform)
+    );
+  });
+}
+
+function findLandingPlatform(
+  x: number,
+  fromY: number,
+  toY: number,
+  activePlatforms: Platform[],
+) {
+  return activePlatforms
+    .filter((platform) => {
+      const platformTop = getPlatformTop(platform);
+
+      return (
+        x >= getPlatformLeft(platform) &&
+        x <= getPlatformRight(platform) &&
+        platformTop >= fromY &&
+        platformTop <= toY
+      );
+    })
+    .sort((a, b) => getPlatformTop(a) - getPlatformTop(b))[0];
+}
+
 function isMovementKey(key: string) {
   return [
     "ArrowUp",
@@ -133,10 +273,14 @@ export default function GameScreen() {
   const [playerHP, setPlayerHP] = useState(100);
   const [isGameOver, setIsGameOver] = useState(false);
   const [enemies, setEnemies] = useState<Enemy[]>(() => getInitialEnemies());
+  const [bullets, setBullets] = useState<Bullet[]>([]);
   const [isEnemyContact, setIsEnemyContact] = useState(false);
   const roomBackground = getRoomBackground(screen);
   const visibleEnemies = getEnemiesForScreen(enemies, screen);
   const pressedKeysRef = useRef(new Set<string>());
+  const bulletsRef = useRef<Bullet[]>([]);
+  const shootTimerRef = useRef(0);
+  const bulletIdCounterRef = useRef(0);
   const playerRef = useRef<Point>(START_POSITION);
   const enemiesRef = useRef<Enemy[]>(enemies);
   const playerHPRef = useRef(100);
@@ -154,6 +298,9 @@ export default function GameScreen() {
     screenTransitionHoldRef.current = 0;
     enemyContactRef.current = false;
     isGameOverRef.current = false;
+    bulletsRef.current = [];
+    shootTimerRef.current = 0;
+    bulletIdCounterRef.current = 0;
     setIsMoving(false);
     setIsJumping(false);
     setIsGrounded(true);
@@ -168,6 +315,7 @@ export default function GameScreen() {
     setPlayer(START_POSITION);
     setPlayerHP(100);
     setEnemies(enemiesRef.current);
+    setBullets([]);
   }
 
   useEffect(() => {
@@ -236,7 +384,82 @@ export default function GameScreen() {
       }
 
       enemiesRef.current = updateEnemies(enemiesRef.current, deltaSeconds);
+      enemiesRef.current = enemiesRef.current.map((enemy) => {
+        if (enemy.movementType !== "chase") {
+          return enemy;
+        }
+
+        if (
+          enemy.screen.row !== screenRef.current.row ||
+          enemy.screen.col !== screenRef.current.col
+        ) {
+          return enemy;
+        }
+
+        return getChasingEnemy(
+          enemy,
+          playerRef.current,
+          getActivePlatforms(screenRef.current),
+          deltaSeconds,
+        );
+      });
       setEnemies(enemiesRef.current);
+
+      bulletsRef.current = bulletsRef.current
+        .map((bullet) => ({
+          ...bullet,
+          x: bullet.x + bullet.dx * bullet.speed * deltaSeconds,
+          y: bullet.y + bullet.dy * bullet.speed * deltaSeconds,
+        }))
+        .filter(
+          (bullet) =>
+            bullet.x >= 0 &&
+            bullet.x <= 100 &&
+            bullet.y >= 0 &&
+            bullet.y <= 100,
+        );
+      setBullets(bulletsRef.current);
+
+      if (screenRef.current.row === 1 && screenRef.current.col === 1) {
+        shootTimerRef.current = Math.max(
+          shootTimerRef.current - deltaSeconds,
+          0,
+        );
+
+        if (shootTimerRef.current <= 0) {
+          const shooter = enemiesRef.current.find(
+            (enemy) =>
+              enemy.shootInterval &&
+              enemy.screen.row === 1 &&
+              enemy.screen.col === 1,
+          );
+
+          if (shooter) {
+            const baseId = bulletIdCounterRef.current++;
+            const bulletOrigin = {
+              x: shooter.x,
+              y: shooter.y - shooter.height * 0.5,
+            };
+            const directionSign = shooter.direction;
+
+            const newBullets = SHOOT_DIRECTION_VECTORS.map(
+              (direction, index) => ({
+                id: `bullet-${baseId}-${index}`,
+                x: bulletOrigin.x,
+                y: bulletOrigin.y,
+                dx: direction.dx * directionSign,
+                dy: direction.dy,
+                speed: BULLET_SPEED,
+                damage: BULLET_DAMAGE,
+              }),
+            );
+
+            bulletsRef.current = [...bulletsRef.current, ...newBullets];
+            setBullets(bulletsRef.current);
+            shootTimerRef.current = shooter.shootInterval ?? 2.2;
+          }
+        }
+      }
 
       const { climbY, dx } = getMovement(pressedKeysRef.current);
 
@@ -394,6 +617,13 @@ export default function GameScreen() {
       playerRef.current = nextPlayer;
       setPlayer(nextPlayer);
 
+      const playerRect = {
+        left: nextPlayer.x - PLAYER_HITBOX.width / 2,
+        right: nextPlayer.x + PLAYER_HITBOX.width / 2,
+        top: nextPlayer.y - PLAYER_HITBOX.height,
+        bottom: nextPlayer.y,
+      };
+
       const collidingEnemy = getCollidingEnemy(
         nextPlayer,
         enemiesRef.current,
@@ -404,6 +634,39 @@ export default function GameScreen() {
       if (contact && !enemyContactRef.current && collidingEnemy) {
         const damage = collidingEnemy.damage ?? 30;
         const nextHP = Math.max(playerHPRef.current - damage, 0);
+        playerHPRef.current = nextHP;
+        setPlayerHP(nextHP);
+
+        if (nextHP === 0) {
+          isGameOverRef.current = true;
+          setIsGameOver(true);
+        }
+      }
+
+      const bulletHit = bulletsRef.current.find((bullet) => {
+        const halfSize = BULLET_SIZE_PERCENT / 2;
+        const bulletRect = {
+          left: bullet.x - halfSize,
+          right: bullet.x + halfSize,
+          top: bullet.y - halfSize,
+          bottom: bullet.y + halfSize,
+        };
+
+        return (
+          bulletRect.left < playerRect.right &&
+          bulletRect.right > playerRect.left &&
+          bulletRect.top < playerRect.bottom &&
+          bulletRect.bottom > playerRect.top
+        );
+      });
+
+      if (bulletHit) {
+        bulletsRef.current = bulletsRef.current.filter(
+          (bullet) => bullet.id !== bulletHit.id,
+        );
+        setBullets(bulletsRef.current);
+
+        const nextHP = Math.max(playerHPRef.current - bulletHit.damage, 0);
         playerHPRef.current = nextHP;
         setPlayerHP(nextHP);
 
@@ -542,15 +805,57 @@ export default function GameScreen() {
               transform: `translate(-50%, -100%) scaleX(${enemy.direction})`,
             }}
           >
-            <div className="relative h-full w-full overflow-hidden rounded-[35%_35%_18%_18%] border border-red-200/35 bg-black/0">
-              <Image
-                src={enemy.spriteSrc ?? "/dog_right.png"}
-                alt="敵"
-                fill
-                sizes="(min-width: 1024px) 5rem, 12vw"
-                className="object-contain"
-              />
+            <div className={`relative h-full w-full overflow-hidden rounded-[35%_35%_18%_18%] border border-red-200/35 bg-black/0 ${
+              enemy.frameSrcs ? "enemy-frame-anim" : ""
+            }`}>
+              {enemy.frameSrcs ? (
+                <>
+                  <div className="enemy-frame frame-a">
+                    <Image
+                      src={enemy.frameSrcs[0]}
+                      alt="敵"
+                      fill
+                      sizes="(min-width: 1024px) 5rem, 12vw"
+                      className="object-contain"
+                    />
+                  </div>
+                  <div className="enemy-frame frame-b">
+                    <Image
+                      src={enemy.frameSrcs[1]}
+                      alt="敵"
+                      fill
+                      sizes="(min-width: 1024px) 5rem, 12vw"
+                      className="object-contain"
+                    />
+                  </div>
+                </>
+              ) : (
+                <Image
+                  src={enemy.shootInterval ? "/bullet_enemy.png" : "/dog_right.png"}
+                  alt="敵"
+                  fill
+                  sizes="(min-width: 1024px) 5rem, 12vw"
+                  className="object-contain"
+                />
+              )}
             </div>
+          </div>
+        ))}
+
+        {bullets.map((bullet) => (
+          <div
+            key={bullet.id}
+            aria-hidden="true"
+            className="pointer-events-none absolute z-20"
+            style={{
+              left: `${bullet.x}%`,
+              top: `${bullet.y}%`,
+              width: `${BULLET_SIZE_PERCENT}%`,
+              height: `${BULLET_SIZE_PERCENT}%`,
+              transform: "translate(-50%, -50%)",
+            }}
+          >
+            <div className="h-full w-full rounded-full bg-amber-400 shadow-[0_0_16px_rgba(248,194,80,0.9)]" />
           </div>
         ))}
 

@@ -20,7 +20,9 @@ export type Enemy = {
   width: number;
   height: number;
   damage?: number;
-  spriteSrc?: string;
+  frameSrcs?: [string, string];
+  shootInterval?: number;
+  movementType?: "patrol" | "chase";
 };
 
 const PLAYER_HITBOX = {
@@ -54,7 +56,36 @@ const BASE_ENEMIES: Enemy[] = [
     width: 5,
     height: 7.5,
     damage: 15,
-    spriteSrc:"/flying_donkey_left.png",
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+  },
+  {
+    id: "enemy-1-1-shooter",
+    screen: { row: 1, col: 1 },
+    x: 55,
+    y: 50.5,
+    minX: 55,
+    maxX: 55,
+    speed: 0,
+    direction: 1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 2.2,
+  },
+  {
+    id: "enemy-1-2-flyer_H",
+    screen: { row: 1, col: 2 },
+    x: 62,
+    y: 20,
+    minX: 15,
+    maxX: 85,
+    speed: 6,
+    direction: -1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+    movementType: "chase",
   },
   {
     id: "enemy-2-1-left",
@@ -68,6 +99,20 @@ const BASE_ENEMIES: Enemy[] = [
     width: 3.6,
     height: 4.8,
     damage: 30,
+  },
+  {
+    id: "enemy-2-1-flyer1",
+    screen: { row: 2, col: 1 },
+    x: 10,
+    y: 50,
+    minX: 25,
+    maxX: 58,
+    speed: 9,
+    direction: -1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
   },
   {
     id: "enemy-3-2-floor",
@@ -143,6 +188,14 @@ export function getCollidingEnemy(
 
 export function updateEnemies(enemies: Enemy[], deltaSeconds: number) {
   return enemies.map((enemy) => {
+    if (enemy.movementType === "chase") {
+      return enemy;
+    }
+
+    if (enemy.speed === 0 || enemy.minX === enemy.maxX) {
+      return enemy;
+    }
+
     let nextX = enemy.x + enemy.direction * enemy.speed * deltaSeconds;
     let nextDirection = enemy.direction;
 

@@ -247,6 +247,8 @@ export default function GameScreen() {
   const [isJumping, setIsJumping] = useState(false);
   const [isGrounded, setIsGrounded] = useState(true);
   const [screen, setScreen] = useState<ScreenPosition>(START_SCREEN);
+  const [playerHP, setPlayerHP] = useState(100);
+  const [isGameOver, setIsGameOver] = useState(false);
   const [enemies, setEnemies] = useState<Enemy[]>(() => getInitialEnemies());
   const [isEnemyContact, setIsEnemyContact] = useState(false);
   const roomBackground = getRoomBackground(screen);
@@ -254,10 +256,36 @@ export default function GameScreen() {
   const pressedKeysRef = useRef(new Set<string>());
   const playerRef = useRef<Point>(START_POSITION);
   const enemiesRef = useRef<Enemy[]>(enemies);
+  const playerHPRef = useRef(100);
+  const enemyContactRef = useRef(false);
+  const isGameOverRef = useRef(false);
   const verticalVelocityRef = useRef(0);
   const isGroundedRef = useRef(true);
   const screenRef = useRef<ScreenPosition>(START_SCREEN);
   const screenTransitionHoldRef = useRef(0);
+
+  function resetGame() {
+    pressedKeysRef.current.clear();
+    verticalVelocityRef.current = 0;
+    isGroundedRef.current = true;
+    screenTransitionHoldRef.current = 0;
+    enemyContactRef.current = false;
+    isGameOverRef.current = false;
+    setIsMoving(false);
+    setIsJumping(false);
+    setIsGrounded(true);
+    setIsEnemyContact(false);
+    setIsGameOver(false);
+    screenRef.current = START_SCREEN;
+    playerRef.current = START_POSITION;
+    enemiesRef.current = getInitialEnemies();
+    playerHPRef.current = 100;
+    setScreen(START_SCREEN);
+    setFacing("right");
+    setPlayer(START_POSITION);
+    setPlayerHP(100);
+    setEnemies(enemiesRef.current);
+  }
 
   useEffect(() => {
     let animationFrameId = 0;
@@ -266,21 +294,7 @@ export default function GameScreen() {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "r" || event.key === "R") {
         event.preventDefault();
-        pressedKeysRef.current.clear();
-        verticalVelocityRef.current = 0;
-        isGroundedRef.current = true;
-        screenTransitionHoldRef.current = 0;
-        setIsMoving(false);
-        setIsJumping(false);
-        setIsGrounded(true);
-        setIsEnemyContact(false);
-        screenRef.current = START_SCREEN;
-        playerRef.current = START_POSITION;
-        enemiesRef.current = getInitialEnemies();
-        setScreen(START_SCREEN);
-        setFacing("right");
-        setPlayer(START_POSITION);
-        setEnemies(enemiesRef.current);
+        resetGame();
         return;
       }
 
@@ -329,6 +343,11 @@ export default function GameScreen() {
           screenTransitionHoldRef.current - deltaSeconds,
           0,
         );
+        animationFrameId = requestAnimationFrame(tick);
+        return;
+      }
+
+      if (isGameOverRef.current) {
         animationFrameId = requestAnimationFrame(tick);
         return;
       }
@@ -491,9 +510,26 @@ export default function GameScreen() {
       const nextPlayer = { x: nextX, y: nextY };
       playerRef.current = nextPlayer;
       setPlayer(nextPlayer);
-      setIsEnemyContact(
-        isPlayerTouchingEnemy(nextPlayer, enemiesRef.current, screenRef.current),
+
+      const contact = isPlayerTouchingEnemy(
+        nextPlayer,
+        enemiesRef.current,
+        screenRef.current,
       );
+
+      if (contact && !enemyContactRef.current) {
+        const nextHP = Math.max(playerHPRef.current - 30, 0);
+        playerHPRef.current = nextHP;
+        setPlayerHP(nextHP);
+
+        if (nextHP === 0) {
+          isGameOverRef.current = true;
+          setIsGameOver(true);
+        }
+      }
+
+      enemyContactRef.current = contact;
+      setIsEnemyContact(contact);
 
       animationFrameId = requestAnimationFrame(tick);
     }
@@ -536,7 +572,7 @@ export default function GameScreen() {
           <p>
             状態: {isGrounded ? "接地" : isJumping ? "ジャンプ中" : "落下中"}
           </p>
-          <p>HP: 100</p>
+          <p>HP: {playerHP}</p>
         </div>
 
         {shouldShowLadder(screen) ? (
@@ -616,16 +652,19 @@ export default function GameScreen() {
             style={{
               left: `${enemy.x}%`,
               top: `${enemy.y}%`,
-              width: `${enemy.width}%`,
-              height: `${enemy.height}%`,
+              width: `${enemy.width * 2.1}%`,
+              height: `${enemy.height * 2.1}%`,
               transform: `translate(-50%, -100%) scaleX(${enemy.direction})`,
             }}
           >
-            <div className="relative h-full w-full overflow-hidden rounded-[35%_35%_18%_18%] border border-red-200/35 bg-[radial-gradient(circle_at_42%_30%,#fecaca_0_10%,#dc2626_24%,#7f1d1d_76%)]">
-              <span className="absolute left-[24%] top-[30%] h-[16%] w-[16%] rounded-full bg-white" />
-              <span className="absolute right-[24%] top-[30%] h-[16%] w-[16%] rounded-full bg-white" />
-              <span className="absolute left-[29%] top-[36%] h-[7%] w-[7%] rounded-full bg-black" />
-              <span className="absolute right-[29%] top-[36%] h-[7%] w-[7%] rounded-full bg-black" />
+            <div className="relative h-full w-full overflow-hidden rounded-[35%_35%_18%_18%] border border-red-200/35 bg-black/0">
+              <Image
+                src="/dog_right.png"
+                alt="敵"
+                fill
+                sizes="(min-width: 1024px) 5rem, 12vw"
+                className="object-contain"
+              />
             </div>
           </div>
         ))}
@@ -667,6 +706,28 @@ export default function GameScreen() {
             />
           </div>
         </div>
+
+        {isGameOver ? (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 px-6 py-4 text-center">
+            <div className="w-full max-w-lg rounded-[1.75rem] border border-white/10 bg-slate-950/95 p-10 shadow-[0_32px_80px_rgba(0,0,0,0.65)]">
+              <p className="text-sm font-semibold uppercase tracking-[0.35em] text-pink-300">
+                GAME OVER
+              </p>
+              <h2 className="mt-6 text-5xl font-semibold text-white">ゲームオーバー</h2>
+              <p className="mt-4 text-base leading-7 text-stone-300">
+                HPが0になりました。再挑戦するには以下のボタンを押してください。
+              </p>
+              <button
+                type="button"
+                onClick={resetGame}
+                className="mt-8 inline-flex rounded-full bg-[var(--accent)] px-7 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-400"
+              >
+                もう一度挑戦する
+              </button>
+              <p className="mt-4 text-xs text-stone-500">Rキーでもリスタートできます。</p>
+            </div>
+          </div>
+        ) : null}
       </section>
 
     </div>

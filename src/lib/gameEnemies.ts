@@ -22,7 +22,7 @@ export type Enemy = {
 };
 
 const PLAYER_HITBOX = {
-  width: 4.2,
+  width: 4.6,
   height: 10,
 };
 
@@ -56,12 +56,12 @@ const BASE_ENEMIES: Enemy[] = [
     screen: { row: 3, col: 2 },
     x: 48,
     y: 94,
-    minX: 28,
-    maxX: 68,
+    minX: 0,
+    maxX: 100,
     speed: 7,
     direction: 1,
     width: 3.8,
-    height: 5,
+    height: 6,
   },
 ];
 

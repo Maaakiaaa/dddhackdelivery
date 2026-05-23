@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   getEnemiesForScreen,
   getInitialEnemies,
+  getCollidingEnemy,
   isPlayerTouchingEnemy,
   updateEnemies,
   type Enemy,
@@ -511,14 +512,16 @@ export default function GameScreen() {
       playerRef.current = nextPlayer;
       setPlayer(nextPlayer);
 
-      const contact = isPlayerTouchingEnemy(
+      const collidingEnemy = getCollidingEnemy(
         nextPlayer,
         enemiesRef.current,
         screenRef.current,
       );
+      const contact = Boolean(collidingEnemy);
 
-      if (contact && !enemyContactRef.current) {
-        const nextHP = Math.max(playerHPRef.current - 30, 0);
+      if (contact && !enemyContactRef.current && collidingEnemy) {
+        const damage = collidingEnemy.damage ?? 30;
+        const nextHP = Math.max(playerHPRef.current - damage, 0);
         playerHPRef.current = nextHP;
         setPlayerHP(nextHP);
 
@@ -659,7 +662,7 @@ export default function GameScreen() {
           >
             <div className="relative h-full w-full overflow-hidden rounded-[35%_35%_18%_18%] border border-red-200/35 bg-black/0">
               <Image
-                src="/dog_right.png"
+                src={enemy.spriteSrc ?? "/dog_right.png"}
                 alt="敵"
                 fill
                 sizes="(min-width: 1024px) 5rem, 12vw"

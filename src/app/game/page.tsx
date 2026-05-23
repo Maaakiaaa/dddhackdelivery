@@ -16,14 +16,6 @@ const menuItems = [
   },
 ] as const;
 
-
-const controlHints = [
-  { key: "矢印キー", action: "プレイヤーを移動させる" },
-  { key: "Z / Enter", action: "アイテムを取得、配達先に配達する" },
-  { key: "X / ESC", action: "メニューを開く、キャンセルする" },
-  { key: "R", action: "ゲームを再スタートする" },
-] as const;
-
 export const metadata: Metadata = {
   title: "ダンジョンデリバリー | タイトル",
   description: "ダンジョンデリバリーのタイトル画面です。",

@@ -6,10 +6,19 @@ import {
   getEnemiesForScreen,
   getInitialEnemies,
   getCollidingEnemy,
-  isPlayerTouchingEnemy,
   updateEnemies,
   type Enemy,
 } from "@/lib/gameEnemies";
+import {
+  findLandingPlatform,
+  findPlatformTopAtPoint,
+  getActivePlatforms,
+  getPlatformBlockCount,
+  getPlatformImageSrc,
+  getPlatformTop,
+  getPlatformVisualTop,
+  START_PLATFORM,
+} from "@/lib/gamePlatforms";
 
 type Point = {
   x: number;
@@ -49,7 +58,6 @@ const LADDER_CLIMB_SPEED = 24;
 const JUMP_VELOCITY = -100;
 const GRAVITY = 150;
 const MAX_FALL_SPEED = 56;
-const PLATFORM_SURFACE_OFFSET = 4.0;
 const SCREEN_TRANSITION_HOLD_SECONDS = 0.6;
 const STAGE_BOUNDS = {
   minX: 4,
@@ -65,56 +73,6 @@ const LADDER_Y_RANGE = {
   min: 0,
   max: 34,
 };
-const BOTTOM_FLOOR_VISUAL_OFFSET = 2;
-
-const platforms = [
-  { label: "開始地点", x: 13, y: 68, size: 4, blocks: 3 },
-  { label: "中央足場", x: 39, y: 51, size: 3.6, blocks: 3 },
-  { label: "岩棚", x: 57, y: 55, size: 3.6, blocks: 3 },
-  { label: "配達先", x: 69, y: 68, size: 4, blocks: 3 },
-  { label: "上層通路", x: 82, y: 33, size: 3.6, blocks: 3 },
-] as const;
-
-const block2Platforms = [
-  { label: "長い足場A", x: 31, y: 82, size: 4, blocks: 6, imageSrc: "/block2.png" },
-  { label: "長い足場B", x: 76, y: 48, size: 4, blocks: 6, imageSrc: "/block2.png" },
-] as const;
-
-const ladderBasePlatforms = [
-  { label: "はしご下足場", x: 90, y: 100, size: 4, blocks: 3 },
-] as const;
-
-const secondRowPlatforms = [
-  { label: "2段目左足場", x: 13, y: 48, size: 4, blocks: 3 },
-  { label: "2段目中央足場", x: 43, y: 70, size: 4, blocks: 4 },
-  { label: "2段目右足場", x: 78, y: 56, size: 4, blocks: 3 },
-  {
-    label: "2段目長い足場",
-    x: 58,
-    y: 86,
-    size: 4,
-    blocks: 6,
-    imageSrc: "/block2.png",
-  },
-] as const;
-
-const bottomFloorPlatforms = Array.from({ length: 24 }, (_, index) => ({
-  label: `下端ブロック${index + 1}`,
-  x: 2 + index * 4,
-  y: 100,
-  size: 4,
-}));
-
-type Platform = {
-  label: string;
-  x: number;
-  y: number;
-  size: number;
-  blocks?: number;
-  imageSrc?: string;
-};
-
-const START_PLATFORM = platforms[0];
 const START_POSITION: Point = {
   x: START_PLATFORM.x,
   y: getPlatformTop(START_PLATFORM),

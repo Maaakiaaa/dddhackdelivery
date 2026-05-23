@@ -16,13 +16,6 @@ const menuItems = [
   },
 ] as const;
 
-const storyPoints = [
-  "王国の秘密の倉庫から、重要な荷物を回収する使命を受けた。",
-  "ダンジョン内を移動し、暗い回廊の奥にある配達先を探さなければならない。",
-  "敵や仕掛けを避けながら、目的地にたどり着く。",
-  "荷物を受け取ったら、安全に脱出地点まで戻る。",
-  "すべてのミッションを完遂できるだろうか？",
-] as const;
 
 const controlHints = [
   { key: "矢印キー", action: "プレイヤーを移動させる" },
@@ -60,12 +53,12 @@ export default function GamePage() {
                 DUNGEON DELIVERY
               </p>
               <h1 className="max-w-4xl text-5xl font-semibold leading-tight text-[var(--foreground)] sm:text-6xl lg:text-5xl">
-                配達ミッション
-                <span className="block text-[var(--accent)]">を完遂せよ</span>
+                ストーリー
               </h1>
               <p className="max-w-2xl text-base leading-8 text-stone-300 sm:text-lg">
-                ダンジョンの奥へ進み、秘密の荷物を回収して脱出する冒険。
-                敵や障害を上手く避けながら、ミッションを成功させられるか？
+                荷物を届けるために、ダンジョンに潜る<br />
+                素早く無事に届けることが、仕事の秘訣<br />
+                余裕があればまだ取られてないお宝も回収しよう
               </p>
             </div>
           </div>
@@ -97,46 +90,6 @@ export default function GamePage() {
               </Link>
             ))}
           </div>
-        </div>
-
-        <div className="grid gap-5">
-          <section
-            id="briefing"
-            className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6"
-          >
-            <h2 className="mb-4 text-sm tracking-[0.3em] text-stone-300">
-              ストーリー
-            </h2>
-            <ul className="space-y-3 text-sm leading-7 text-stone-300">
-              {storyPoints.map((point, index) => (
-                <li
-                  key={index}
-                  className="rounded-2xl border border-white/8 bg-black/20 px-4 py-3"
-                >
-                  <span className="text-[var(--accent)]">◆</span> {point}
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6">
-            <h2 className="mb-4 text-sm tracking-[0.3em] text-stone-300">
-              操作方法
-            </h2>
-            <div className="space-y-3">
-              {controlHints.map((hint) => (
-                <div
-                  key={hint.key}
-                  className="flex items-start justify-between rounded-2xl border border-white/8 bg-black/20 px-4 py-3"
-                >
-                  <span className="font-mono text-xs font-semibold uppercase tracking-[0.26em] text-[var(--accent)]">
-                    {hint.key}
-                  </span>
-                  <span className="text-right text-sm text-stone-300">{hint.action}</span>
-                </div>
-              ))}
-            </div>
-          </section>
         </div>
       </section>
     </main>

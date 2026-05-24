@@ -26,7 +26,7 @@ type PlatformInput = {
 
 const PLATFORM_SURFACE_OFFSET = 4.0;
 const BOTTOM_FLOOR_VISUAL_OFFSET = 2;
-const PLATFORMLESS_ROWS = [4];
+const PLATFORMLESS_ROWS: number[] = [];
 
 function createPlatform(platform: PlatformInput): Platform {
   return {

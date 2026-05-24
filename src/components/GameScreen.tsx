@@ -56,6 +56,7 @@ const PLAYER_SPEED = 18;
 const BULLET_SPEED = 55;
 const BULLET_DAMAGE = 15;
 const BULLET_SIZE_PERCENT = 1.4;
+const BULLET_IMAGE_SRC = "/bullet.png";
 const PLAYER_HITBOX = {
   width: 4.6,
   height: 10,
@@ -269,44 +270,42 @@ export default function GameScreen() {
         );
       setBullets(bulletsRef.current);
 
-      if (screenRef.current.row === 1 && screenRef.current.col === 1) {
+      const shooter = enemiesRef.current.find(
+        (enemy) =>
+          enemy.shootInterval &&
+          enemy.screen.row === screenRef.current.row &&
+          enemy.screen.col === screenRef.current.col,
+      );
+
+      if (shooter) {
         shootTimerRef.current = Math.max(
           shootTimerRef.current - deltaSeconds,
           0,
         );
 
         if (shootTimerRef.current <= 0) {
-          const shooter = enemiesRef.current.find(
-            (enemy) =>
-              enemy.shootInterval &&
-              enemy.screen.row === 1 &&
-              enemy.screen.col === 1,
+          const baseId = bulletIdCounterRef.current++;
+          const bulletOrigin = {
+            x: shooter.x,
+            y: shooter.y - shooter.height * 0.5,
+          };
+          const directionSign = shooter.direction;
+
+          const newBullets = SHOOT_DIRECTION_VECTORS.map(
+            (direction, index) => ({
+              id: `bullet-${baseId}-${index}`,
+              x: bulletOrigin.x,
+              y: bulletOrigin.y,
+              dx: direction.dx * directionSign,
+              dy: direction.dy,
+              speed: BULLET_SPEED,
+              damage: BULLET_DAMAGE,
+            }),
           );
 
-          if (shooter) {
-            const baseId = bulletIdCounterRef.current++;
-            const bulletOrigin = {
-              x: shooter.x,
-              y: shooter.y - shooter.height * 0.5,
-            };
-            const directionSign = shooter.direction;
-
-            const newBullets = SHOOT_DIRECTION_VECTORS.map(
-              (direction, index) => ({
-                id: `bullet-${baseId}-${index}`,
-                x: bulletOrigin.x,
-                y: bulletOrigin.y,
-                dx: direction.dx * directionSign,
-                dy: direction.dy,
-                speed: BULLET_SPEED,
-                damage: BULLET_DAMAGE,
-              }),
-            );
-
-            bulletsRef.current = [...bulletsRef.current, ...newBullets];
-            setBullets(bulletsRef.current);
-            shootTimerRef.current = shooter.shootInterval ?? 2.2;
-          }
+          bulletsRef.current = [...bulletsRef.current, ...newBullets];
+          setBullets(bulletsRef.current);
+          shootTimerRef.current = shooter.shootInterval ?? 2.2;
         }
       }
 
@@ -705,7 +704,13 @@ export default function GameScreen() {
               transform: "translate(-50%, -50%)",
             }}
           >
-            <div className="h-full w-full rounded-full bg-amber-400 shadow-[0_0_16px_rgba(248,194,80,0.9)]" />
+            <Image
+              src={BULLET_IMAGE_SRC}
+              alt="弾丸"
+              fill
+              sizes="4rem"
+              className="object-contain scale-[3]"
+            />
           </div>
         ))}
 

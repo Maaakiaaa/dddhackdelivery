@@ -16,6 +16,14 @@ const menuItems = [
   },
 ] as const;
 
+
+const controlHints = [
+  { key: "矢印キー", action: "プレイヤーを移動させる" },
+  { key: "Z / Enter", action: "アイテムを取得、配達先に配達する" },
+  { key: "X / ESC", action: "メニューを開く、キャンセルする" },
+  { key: "R", action: "ゲームを再スタートする" },
+] as const;
+
 export const metadata: Metadata = {
   title: "ダンジョンデリバリー | タイトル",
   description: "ダンジョンデリバリーのタイトル画面です。",
@@ -94,8 +102,19 @@ export default function GamePage() {
               <li>
                 <span className="font-semibold text-[var(--foreground)]">移動:</span> WASD / ←↑↓→
               </li>
+<<<<<<< HEAD
                <li>
                 <span className="font-semibold text-[var(--foreground)]">ジャンプ:</span> space
+=======
+              <li>
+                <span className="font-semibold text-[var(--foreground)]">決定:</span> Enter / Z
+              </li>
+              <li>
+                <span className="font-semibold text-[var(--foreground)]">キャンセル:</span> Esc / X
+              </li>
+              <li>
+                <span className="font-semibold text-[var(--foreground)]">メニュー:</span> M
+>>>>>>> c31ac5350c731b62d6ef04aba1cc970454e1d64e
               </li>
             </ul>
           </aside>

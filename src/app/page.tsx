@@ -42,7 +42,8 @@ export default function Home() {
             <div className="space-y-5">
               <h1 className="text-5xl font-semibold leading-tight text-[var(--foreground)] sm:text-6xl lg:text-7xl">
                 ダンジョン
-                <span className="block text-[var(--accent)]">デリバリー</span>
+                <span className="block text-[var(--accent)]">デリバー</span>
+                <span className="block text-[var(--accent)]">ディスカバリー</span>
               </h1>
               <p className="max-w-2xl text-base leading-8 text-stone-300 sm:text-lg">
                 ダンジョンの中を進み、依頼された荷物を届ける探索ゲームです。

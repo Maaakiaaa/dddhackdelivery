@@ -7,6 +7,8 @@ export type DeliveryItem = {
 export type MapItemPlacement = {
   id: string;
   itemId: string;
+  name: string;
+  imageSrc: string;
   screen: {
     row: number;
     col: number;
@@ -34,17 +36,21 @@ export const DELIVERY_ITEMS: DeliveryItem[] = [
   }
 ];
 
-export const MAP_ITEM_PLACEMENTS: MapItemPlacement[] = [
+export const INVENTORY_DISPLAY_ITEMS: DeliveryItem[] = [
+  ...DELIVERY_ITEMS,
   {
-    id: "pickup-takara-1-1",
-    itemId: "takara",
-    screen: { row: 1, col: 1 },
-    x: 38,
-    y: 88,
+    id: "takara",
+    name: "お宝",
+    imageSrc: "/otakara.png",
   },
+];
+
+export const MAP_ITEM_PLACEMENTS: MapItemPlacement[] = [
   {
     id: "pickup-takara-1-2",
     itemId: "takara",
+    name: "お宝",
+    imageSrc: "/otakara.png",
     screen: { row: 1, col: 2 },
     x: 34,
     y: 88,
@@ -52,6 +58,8 @@ export const MAP_ITEM_PLACEMENTS: MapItemPlacement[] = [
   {
     id: "pickup-takara-1-3",
     itemId: "takara",
+    name: "お宝",
+    imageSrc: "/otakara.png",
     screen: { row: 1, col: 3 },
     x: 66,
     y: 62,
@@ -59,6 +67,8 @@ export const MAP_ITEM_PLACEMENTS: MapItemPlacement[] = [
   {
     id: "pickup-takara-2-1",
     itemId: "takara",
+    name: "お宝",
+    imageSrc: "/otakara.png",
     screen: { row: 2, col: 1 },
     x: 18,
     y: 72,
@@ -66,6 +76,8 @@ export const MAP_ITEM_PLACEMENTS: MapItemPlacement[] = [
   {
     id: "pickup-takara-3-2",
     itemId: "takara",
+    name: "お宝",
+    imageSrc: "/otakara.png",
     screen: { row: 3, col: 2 },
     x: 74,
     y: 32,

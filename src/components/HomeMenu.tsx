@@ -1,82 +1,70 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import HomeRankingBoard from "@/components/HomeRankingBoard";
-
-const menuItems = [
-  {
-    label: "ゲーム開始",
-    description: "配達ミッションを始めます。",
-    href: "/game",
-    primary: true,
-  },
-  {
-    label: "ゲーム説明",
-    description: "詳細なゲーム説明を見ます。",
-    href: "/game",
-    primary: false,
-  },
-] as const;
-
-function menuButtonClass(primary = false) {
-  return `group rounded-[1.5rem] border px-5 py-5 text-left transition duration-200 ${
-    primary
-      ? "border-[var(--accent)] bg-[linear-gradient(180deg,rgba(226,199,137,0.22),rgba(226,199,137,0.08))] shadow-[0_18px_40px_rgba(226,199,137,0.12)] hover:translate-y-[-2px] hover:bg-[linear-gradient(180deg,rgba(226,199,137,0.3),rgba(226,199,137,0.12))]"
-      : "border-white/10 bg-white/[0.03] hover:border-[var(--accent)] hover:bg-white/[0.05]"
-  }`;
-}
 
 export default function HomeMenu() {
   const [isRankingOpen, setIsRankingOpen] = useState(false);
 
   return (
-    <div className="space-y-5">
-      <div className="grid max-w-4xl gap-4 sm:grid-cols-3">
-        {menuItems.map((item) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            className={menuButtonClass(item.primary)}
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-lg font-semibold text-[var(--foreground)]">
-                  {item.label}
-                </span>
-                <span className="text-sm text-stone-400 transition group-hover:text-[var(--accent)]">
-                  &gt;
-                </span>
-              </div>
-              <p className="text-sm leading-6 text-stone-300">
-                {item.description}
-              </p>
-            </div>
-          </Link>
-        ))}
+    <div className="w-full max-w-4xl space-y-5">
+      <div className="flex flex-col items-center justify-center gap-5 sm:flex-row">
+        <Link
+          href="/game"
+          className="group grid h-24 w-64 place-items-center transition hover:scale-105"
+        >
+          <Image
+            src="/start.png"
+            alt="ゲーム開始"
+            width={512}
+            height={192}
+            priority
+            className="h-auto w-full object-contain drop-shadow-[0_14px_22px_rgba(0,0,0,0.45)]"
+          />
+        </Link>
 
         <button
           type="button"
-          onClick={() => setIsRankingOpen((current) => !current)}
-          className={menuButtonClass(false)}
+          onClick={() => setIsRankingOpen(true)}
+          className="group grid h-24 w-64 place-items-center transition hover:scale-105"
         >
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-lg font-semibold text-[var(--foreground)]">
-                ランキング
-              </span>
-              <span className="text-sm text-stone-400 transition group-hover:text-[var(--accent)]">
-                {isRankingOpen ? "∨" : ">"}
-              </span>
-            </div>
-            <p className="text-sm leading-6 text-stone-300">
-              スコア上位を表示します。
-            </p>
-          </div>
+          <Image
+            src="/ranking.png"
+            alt="ランキング"
+            width={512}
+            height={192}
+            priority
+            className="h-auto w-full object-contain drop-shadow-[0_14px_22px_rgba(0,0,0,0.45)]"
+          />
         </button>
       </div>
 
-      {isRankingOpen ? <HomeRankingBoard /> : null}
+      {isRankingOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="ランキング一覧"
+          onClick={() => setIsRankingOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setIsRankingOpen(false)}
+              className="absolute right-3 top-3 z-20 grid h-9 w-9 place-items-center border-2 border-[#d8b66a] bg-[#2a1d17] font-mono text-lg font-bold text-[#f2d486] shadow-[3px_3px_0_rgba(0,0,0,0.45)] transition hover:bg-[#3a261c]"
+              aria-label="ランキングを閉じる"
+            >
+              X
+            </button>
+            <HomeRankingBoard />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

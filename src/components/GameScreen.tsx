@@ -1,13 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import GameTimer from "@/components/GameTimer";
 import ItemBag from "@/components/ItemBag";
 import ScoreRankingPanel from "@/components/ScoreRankingPanel";
 import StartSetupPanel from "@/components/StartSetupPanel";
 import {
   DELIVERY_ITEMS,
+  INVENTORY_DISPLAY_ITEMS,
   MAP_ITEM_PLACEMENTS,
   type MapItemPlacement,
 } from "@/data/item-list";
@@ -72,6 +73,10 @@ const STARTING_ITEM_COUNT_LIMIT = 3;
 const PICKUP_HEAL_AMOUNT = 50;
 const TIME_BONUS_LIMIT_SECONDS = 120;
 const TIME_BONUS_SCORE = 100;
+const BGM_SRC = "/bgm.mp3";
+const BGM_VOLUME = 0.45;
+const DAMAGE_SOUND_SRC = "/dame.mp3";
+const DAMAGE_SOUND_VOLUME = 0.8;
 const PLAYER_SPEED = 18;
 const BULLET_SPEED = 55;
 const BULLET_DAMAGE = 15;
@@ -206,6 +211,52 @@ export default function GameScreen() {
   const enemyShootTimersRef = useRef<Record<string, number>>({});
   const runStartedAtRef = useRef(0);
   const scoreResultRef = useRef<ScoreResult | null>(null);
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+  const damageSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  function getBgm() {
+    if (bgmRef.current === null) {
+      const audio = new Audio(BGM_SRC);
+      audio.loop = true;
+      audio.volume = BGM_VOLUME;
+      bgmRef.current = audio;
+    }
+
+    return bgmRef.current;
+  }
+
+  function playBgm() {
+    const bgm = getBgm();
+    bgm.currentTime = 0;
+    void bgm.play().catch(() => {
+      // Browser autoplay policy may block audio if startGame is not user-initiated.
+    });
+  }
+
+  function stopBgm() {
+    if (bgmRef.current === null) {
+      return;
+    }
+
+    bgmRef.current.pause();
+    bgmRef.current.currentTime = 0;
+  }
+
+  function getDamageSound() {
+    if (damageSoundRef.current === null) {
+      const audio = new Audio(DAMAGE_SOUND_SRC);
+      audio.volume = DAMAGE_SOUND_VOLUME;
+      damageSoundRef.current = audio;
+    }
+
+    return damageSoundRef.current;
+  }
+
+  const playDamageSound = useCallback(() => {
+    const damageSound = getDamageSound();
+    damageSound.currentTime = 0;
+    void damageSound.play().catch(() => {});
+  }, []);
 
   function finishScoreIfGoal(nextScreen: ScreenPosition, currentTime: number) {
     if (!isGoalScreen(nextScreen) || scoreResultRef.current !== null) {
@@ -288,13 +339,29 @@ export default function GameScreen() {
     startingInventoryRef.current = cloneInventory(draftInventory);
     resetGame();
     setIsGameStarted(true);
+    playBgm();
   }
 
   function returnToItemSetup() {
     setIsGameStarted(false);
     setIsGameOver(false);
     isGameOverRef.current = false;
+    stopBgm();
   }
+
+  useEffect(() => {
+    return () => {
+      if (bgmRef.current !== null) {
+        bgmRef.current.pause();
+        bgmRef.current.currentTime = 0;
+      }
+
+      if (damageSoundRef.current !== null) {
+        damageSoundRef.current.pause();
+        damageSoundRef.current.currentTime = 0;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!isGameStarted) {
@@ -675,6 +742,7 @@ if (createdBullets.length > 0) {
         const nextHP = Math.max(playerHPRef.current - damage, 0);
         playerHPRef.current = nextHP;
         setPlayerHP(nextHP);
+        playDamageSound();
 
         if (nextHP === 0) {
           isGameOverRef.current = true;
@@ -708,6 +776,7 @@ if (createdBullets.length > 0) {
         const nextHP = Math.max(playerHPRef.current - bulletHit.damage, 0);
         playerHPRef.current = nextHP;
         setPlayerHP(nextHP);
+        playDamageSound();
 
         if (nextHP === 0) {
           isGameOverRef.current = true;
@@ -732,7 +801,7 @@ if (createdBullets.length > 0) {
       window.removeEventListener("blur", handleBlur);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [isGameStarted]);
+  }, [isGameStarted, playDamageSound]);
 
   const totalDraftItems = DELIVERY_ITEMS.reduce(
     (total, item) => total + (draftInventory[item.id] ?? 0),
@@ -762,7 +831,7 @@ if (createdBullets.length > 0) {
           <>
             <GameTimer key={gameRunId} className="bottom-4 left-4" />
             <ItemBag
-              items={DELIVERY_ITEMS}
+              items={INVENTORY_DISPLAY_ITEMS}
               inventory={inventory}
               className="pointer-events-none absolute right-4 top-4 z-20 max-w-[18rem]"
             />
@@ -770,11 +839,7 @@ if (createdBullets.length > 0) {
         ) : null}
 
         <div className="absolute left-4 top-4 z-20 hidden min-w-40 rounded-lg border border-white/10 bg-black/55 px-4 py-3 text-sm text-stone-100 shadow-[0_12px_32px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:block">
-          <p>位置: X {Math.round(player.x)} / Y {Math.round(player.y)}</p>
-          <p>画面: {screen.row},{screen.col}</p>
-          <p>
-            状態: {isGrounded ? "接地" : isJumping ? "ジャンプ中" : "落下中"}
-          </p>
+          <p>エリア: {screen.row},{screen.col}</p>
           <p>HP: {playerHP}</p>
         </div>
 
@@ -851,19 +916,10 @@ if (createdBullets.length > 0) {
           ))}
         </div>
 
-        {visiblePickupItems.map((pickupItem) => {
-          const item = DELIVERY_ITEMS.find(
-            (deliveryItem) => deliveryItem.id === pickupItem.itemId,
-          );
-
-          if (item === undefined) {
-            return null;
-          }
-
-          return (
+        {visiblePickupItems.map((pickupItem) => (
             <div
               key={pickupItem.id}
-              aria-label={`${item.name}を拾う`}
+              aria-label={`${pickupItem.name}を拾う`}
               className="pointer-events-none absolute z-10 rounded-md border border-amber-100/45 bg-black/35 shadow-[0_0_18px_rgba(226,199,137,0.45)]"
               style={{
                 left: `${pickupItem.x}%`,
@@ -872,18 +928,17 @@ if (createdBullets.length > 0) {
                 aspectRatio: "1 / 1",
                 transform: "translate(-50%, -50%)",
               }}
-              title={item.name}
+              title={pickupItem.name}
             >
               <Image
-                src={item.imageSrc}
-                alt={item.name}
+                src={pickupItem.imageSrc}
+                alt={pickupItem.name}
                 fill
                 sizes="(min-width: 1024px) 4rem, 8vw"
                 className="rounded-md object-cover"
               />
             </div>
-          );
-        })}
+        ))}
 
         {visibleEnemies.map((enemy) => (
           <div

@@ -4,7 +4,11 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import GameTimer from "@/components/GameTimer";
 import ItemBag from "@/components/ItemBag";
-import { DELIVERY_ITEMS } from "@/data/item-list";
+import {
+  DELIVERY_ITEMS,
+  MAP_ITEM_PLACEMENTS,
+  type MapItemPlacement,
+} from "@/data/item-list";
 import {
   getEnemiesForScreen,
   getInitialEnemies,
@@ -56,10 +60,17 @@ type Bullet = {
 
 type InventoryCounts = Record<string, number>;
 
+type PickupItem = MapItemPlacement & {
+  size: number;
+};
+
+const STARTING_ITEM_COUNT_LIMIT = 3;
+const PICKUP_HEAL_AMOUNT = 50;
 const PLAYER_SPEED = 18;
 const BULLET_SPEED = 55;
 const BULLET_DAMAGE = 15;
 const BULLET_SIZE_PERCENT = 1.4;
+const DEFAULT_PICKUP_SIZE_PERCENT = 5;
 const PLAYER_HITBOX = {
   width: 4.6,
   height: 10,
@@ -90,6 +101,21 @@ function getEmptyInventory() {
     inventory[item.id] = 0;
     return inventory;
   }, {});
+}
+
+function cloneInventory(inventory: InventoryCounts) {
+  return DELIVERY_ITEMS.reduce<InventoryCounts>((nextInventory, item) => {
+    nextInventory[item.id] = inventory[item.id] ?? 0;
+    return nextInventory;
+  }, {});
+}
+
+function getInitialPickupItems() {
+  return MAP_ITEM_PLACEMENTS.map((item) => ({
+    ...item,
+    screen: { ...item.screen },
+    size: item.size ?? DEFAULT_PICKUP_SIZE_PERCENT,
+  }));
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -134,6 +160,9 @@ export default function GameScreen() {
   const [draftInventory, setDraftInventory] = useState<InventoryCounts>(() =>
     getEmptyInventory(),
   );
+  const [pickupItems, setPickupItems] = useState<PickupItem[]>(() =>
+    getInitialPickupItems(),
+  );
   const [player, setPlayer] = useState<Point>(START_POSITION);
   const [facing, setFacing] = useState<Direction>("right");
   const [isMoving, setIsMoving] = useState(false);
@@ -147,6 +176,9 @@ export default function GameScreen() {
   const [isEnemyContact, setIsEnemyContact] = useState(false);
   const roomBackground = getRoomBackground(screen);
   const visibleEnemies = getEnemiesForScreen(enemies, screen);
+  const visiblePickupItems = pickupItems.filter(
+    (item) => item.screen.row === screen.row && item.screen.col === screen.col,
+  );
   const pressedKeysRef = useRef(new Set<string>());
   const bulletsRef = useRef<Bullet[]>([]);
   const shootTimerRef = useRef(0);
@@ -160,15 +192,24 @@ export default function GameScreen() {
   const isGroundedRef = useRef(true);
   const screenRef = useRef<ScreenPosition>(START_SCREEN);
   const screenTransitionHoldRef = useRef(0);
+  const inventoryRef = useRef<InventoryCounts>(getEmptyInventory());
+  const startingInventoryRef = useRef<InventoryCounts>(getEmptyInventory());
+  const pickupItemsRef = useRef<PickupItem[]>(getInitialPickupItems());
 
   function updateDraftItemCount(itemId: string, delta: number) {
     setDraftInventory((current) => ({
       ...current,
-      [itemId]: clamp((current[itemId] ?? 0) + delta, 0, 9),
+      [itemId]: clamp(
+        (current[itemId] ?? 0) + delta,
+        0,
+        STARTING_ITEM_COUNT_LIMIT,
+      ),
     }));
   }
 
   function resetGame() {
+    const initialInventory = cloneInventory(startingInventoryRef.current);
+
     pressedKeysRef.current.clear();
     verticalVelocityRef.current = 0;
     isGroundedRef.current = true;
@@ -186,18 +227,22 @@ export default function GameScreen() {
     screenRef.current = START_SCREEN;
     playerRef.current = START_POSITION;
     enemiesRef.current = getInitialEnemies();
+    pickupItemsRef.current = getInitialPickupItems();
+    inventoryRef.current = initialInventory;
     playerHPRef.current = 100;
     setScreen(START_SCREEN);
     setFacing("right");
     setPlayer(START_POSITION);
     setPlayerHP(100);
     setEnemies(enemiesRef.current);
+    setPickupItems(pickupItemsRef.current);
+    setInventory(initialInventory);
     setBullets([]);
     setGameRunId((current) => current + 1);
   }
 
   function startGame() {
-    setInventory(draftInventory);
+    startingInventoryRef.current = cloneInventory(draftInventory);
     resetGame();
     setIsGameStarted(true);
   }
@@ -514,6 +559,48 @@ export default function GameScreen() {
         bottom: nextPlayer.y,
       };
 
+      const pickupHit = pickupItemsRef.current.find((item) => {
+        if (
+          item.screen.row !== screenRef.current.row ||
+          item.screen.col !== screenRef.current.col
+        ) {
+          return false;
+        }
+
+        const halfSize = item.size / 2;
+        const itemRect = {
+          left: item.x - halfSize,
+          right: item.x + halfSize,
+          top: item.y - halfSize,
+          bottom: item.y + halfSize,
+        };
+
+        return (
+          itemRect.left < playerRect.right &&
+          itemRect.right > playerRect.left &&
+          itemRect.top < playerRect.bottom &&
+          itemRect.bottom > playerRect.top
+        );
+      });
+
+      if (pickupHit) {
+        const currentCount = inventoryRef.current[pickupHit.itemId] ?? 0;
+        const nextInventory = {
+          ...inventoryRef.current,
+          [pickupHit.itemId]: currentCount + 1,
+        };
+        const nextHP = playerHPRef.current + PICKUP_HEAL_AMOUNT;
+
+        inventoryRef.current = nextInventory;
+        playerHPRef.current = nextHP;
+        pickupItemsRef.current = pickupItemsRef.current.filter(
+          (item) => item.id !== pickupHit.id,
+        );
+        setInventory(nextInventory);
+        setPlayerHP(nextHP);
+        setPickupItems(pickupItemsRef.current);
+      }
+
       const collidingEnemy = getCollidingEnemy(
         nextPlayer,
         enemiesRef.current,
@@ -698,6 +785,40 @@ export default function GameScreen() {
           ))}
         </div>
 
+        {visiblePickupItems.map((pickupItem) => {
+          const item = DELIVERY_ITEMS.find(
+            (deliveryItem) => deliveryItem.id === pickupItem.itemId,
+          );
+
+          if (item === undefined) {
+            return null;
+          }
+
+          return (
+            <div
+              key={pickupItem.id}
+              aria-label={`${item.name}を拾う`}
+              className="pointer-events-none absolute z-10 rounded-md border border-amber-100/45 bg-black/35 shadow-[0_0_18px_rgba(226,199,137,0.45)]"
+              style={{
+                left: `${pickupItem.x}%`,
+                top: `${pickupItem.y}%`,
+                width: `${pickupItem.size}%`,
+                aspectRatio: "1 / 1",
+                transform: "translate(-50%, -50%)",
+              }}
+              title={item.name}
+            >
+              <Image
+                src={item.imageSrc}
+                alt={item.name}
+                fill
+                sizes="(min-width: 1024px) 4rem, 8vw"
+                className="rounded-md object-cover"
+              />
+            </div>
+          );
+        })}
+
         {visibleEnemies.map((enemy) => (
           <div
             key={enemy.id}
@@ -845,7 +966,7 @@ export default function GameScreen() {
                             {item.name}
                           </p>
                           <p className="mt-1 text-xs text-stone-400">
-                            3個まで所持可能
+                            {STARTING_ITEM_COUNT_LIMIT}個まで所持可能
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -866,7 +987,7 @@ export default function GameScreen() {
                             aria-label={`${item.name}を増やす`}
                             onClick={() => updateDraftItemCount(item.id, 1)}
                             className="grid h-8 w-8 place-items-center rounded-md border border-white/10 bg-black/40 text-lg leading-none text-stone-100 transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-35"
-                            disabled={count === 3}
+                            disabled={count === STARTING_ITEM_COUNT_LIMIT}
                           >
                             +
                           </button>

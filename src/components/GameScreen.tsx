@@ -196,6 +196,7 @@ export default function GameScreen() {
   const inventoryRef = useRef<InventoryCounts>(getEmptyInventory());
   const startingInventoryRef = useRef<InventoryCounts>(getEmptyInventory());
   const pickupItemsRef = useRef<PickupItem[]>(getInitialPickupItems());
+  const enemyShootTimersRef = useRef<Record<string, number>>({});
 
   function updateDraftItemCount(itemId: string, delta: number) {
     setDraftInventory((current) => ({
@@ -358,44 +359,62 @@ export default function GameScreen() {
         );
       setBullets(bulletsRef.current);
 
-      const shooter = enemiesRef.current.find(
-        (enemy) =>
-          enemy.shootInterval &&
-          enemy.screen.row === screenRef.current.row &&
-          enemy.screen.col === screenRef.current.col,
-      );
+const shooters = enemiesRef.current.filter(
+  (enemy) =>
+    enemy.shootInterval &&
+    enemy.screen.row === screenRef.current.row &&
+    enemy.screen.col === screenRef.current.col,
+);
 
-      if (shooter) {
-        shootTimerRef.current = Math.max(
-          shootTimerRef.current - deltaSeconds,
-          0,
-        );
+const createdBullets: Bullet[] = [];
 
-        if (shootTimerRef.current <= 0) {
-          const baseId = bulletIdCounterRef.current++;
-          const bulletOrigin = {
-            x: shooter.x,
-            y: shooter.y - shooter.height * 0.5,
-          };
-          const directionSign = shooter.direction;
+for (const shooter of shooters) {
+  const currentTimer =
+    enemyShootTimersRef.current[shooter.id] ??
+    shooter.shootInterval ??
+    2.2;
 
-          const newBullets = SHOOT_DIRECTION_VECTORS.map(
-            (direction, index) => ({
-              id: `bullet-${baseId}-${index}`,
-              x: bulletOrigin.x,
-              y: bulletOrigin.y,
-              dx: direction.dx * directionSign,
-              dy: direction.dy,
-              speed: BULLET_SPEED,
-              damage: BULLET_DAMAGE,
-            }),
-          );
+  const nextTimer = currentTimer - deltaSeconds;
 
-          bulletsRef.current = [...bulletsRef.current, ...newBullets];
-          setBullets(bulletsRef.current);
-          shootTimerRef.current = shooter.shootInterval ?? 2.2;
-        }
-      }
+  if (nextTimer <= 0) {
+    const baseId = bulletIdCounterRef.current++;
+
+    const bulletOrigin = {
+      x: shooter.x,
+      y: shooter.y - shooter.height * 0.5,
+    };
+
+    const directionSign = shooter.direction;
+
+    const newBullets = SHOOT_DIRECTION_VECTORS.map(
+      (direction, index) => ({
+        id: `bullet-${baseId}-${index}`,
+        x: bulletOrigin.x,
+        y: bulletOrigin.y,
+        dx: direction.dx * directionSign,
+        dy: direction.dy,
+        speed: BULLET_SPEED,
+        damage: BULLET_DAMAGE,
+      }),
+    );
+
+    createdBullets.push(...newBullets);
+
+    enemyShootTimersRef.current[shooter.id] =
+      shooter.shootInterval ?? 2.2;
+  } else {
+    enemyShootTimersRef.current[shooter.id] = nextTimer;
+  }
+}
+
+if (createdBullets.length > 0) {
+  bulletsRef.current = [
+    ...bulletsRef.current,
+    ...createdBullets,
+  ];
+
+  setBullets(bulletsRef.current);
+}
 
       const { climbY, dx } = getMovement(pressedKeysRef.current);
 

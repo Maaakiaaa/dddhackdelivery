@@ -86,7 +86,7 @@ export function getRoomBackground(screen: ScreenPosition) {
   return isGoalScreen(screen)
     ? {
         alt: "溶岩の光が差し込むゴールの洞窟",
-        src: "/goal.png",
+        src: "/shop.jpg",
       }
     : {
         alt: "青く光る結晶がある洞窟の背景",

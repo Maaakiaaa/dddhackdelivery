@@ -1,20 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-
-const menuItems = [
-  {
-    label: "ゲーム開始",
-    description: "配達ミッションを始めます。",
-    href: "/game",
-    primary: true,
-  },
-  {
-    label: "ゲーム説明",
-    description: "詳細なゲーム説明を見ます。",
-    href: "/game",
-    primary: false,
-  },
-] as const;
+import HomeMenu from "@/components/HomeMenu";
 
 export const metadata: Metadata = {
   title: "ダンジョンデリバリー | トップページ",
@@ -32,6 +17,9 @@ export default function Home() {
 
       <section className="mx-auto grid w-full max-w-4xl gap-8 overflow-hidden rounded-[2rem] border border-[var(--panel-border)] bg-[linear-gradient(160deg,rgba(11,14,15,0.94),rgba(17,24,22,0.88))] px-8 py-12 shadow-[0_32px_120px_rgba(0,0,0,0.5)] lg:py-16">
         <div className="grid gap-8 lg:grid-cols-[1.7fr_1fr]">
+      <section className="mx-auto grid w-full max-w-6xl gap-8 overflow-hidden rounded-[2rem] border border-[var(--panel-border)] bg-[linear-gradient(160deg,rgba(11,14,15,0.94),rgba(17,24,22,0.88))] px-8 py-12 shadow-[0_32px_120px_rgba(0,0,0,0.5)] lg:py-16">
+        <div className="flex flex-col gap-8">
+
           <div className="space-y-6">
             <div className="flex items-center gap-3">
               <span className="rounded-full border border-amber-100/15 bg-amber-100/5 px-4 py-1 text-sm tracking-[0.2em] text-[var(--accent)]">
@@ -51,7 +39,6 @@ export default function Home() {
               </p>
             </div>
           </div>
-
           
         </div>
 

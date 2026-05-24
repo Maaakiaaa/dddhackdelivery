@@ -102,19 +102,8 @@ export default function GamePage() {
               <li>
                 <span className="font-semibold text-[var(--foreground)]">移動:</span> WASD / ←↑↓→
               </li>
-<<<<<<< HEAD
                <li>
                 <span className="font-semibold text-[var(--foreground)]">ジャンプ:</span> space
-=======
-              <li>
-                <span className="font-semibold text-[var(--foreground)]">決定:</span> Enter / Z
-              </li>
-              <li>
-                <span className="font-semibold text-[var(--foreground)]">キャンセル:</span> Esc / X
-              </li>
-              <li>
-                <span className="font-semibold text-[var(--foreground)]">メニュー:</span> M
->>>>>>> c31ac5350c731b62d6ef04aba1cc970454e1d64e
               </li>
             </ul>
           </aside>

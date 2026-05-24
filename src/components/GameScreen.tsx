@@ -7,6 +7,7 @@ import {
   getEnemiesForScreen,
   getInitialEnemies,
   getCollidingEnemy,
+  getChasingEnemy,
   updateEnemies,
   type Enemy,
 } from "@/lib/gameEnemies";
@@ -193,8 +194,6 @@ export default function GameScreen() {
           screenTransitionHoldRef.current - deltaSeconds,
           0,
         );
-        animationFrameId = requestAnimationFrame(tick);
-        return;
       }
 
       if (isGameOverRef.current) {
@@ -222,7 +221,7 @@ export default function GameScreen() {
         const previousScreen = screenRef.current;
         const nextScreen = getScreenRight(previousScreen);
 
-        if (nextScreen !== null) {
+        if (nextScreen !== null && screenTransitionHoldRef.current <= 0) {
           nextX = STAGE_BOUNDS.minX;
           screenRef.current = nextScreen;
           screenTransitionHoldRef.current = SCREEN_TRANSITION_HOLD_SECONDS;
@@ -241,7 +240,7 @@ export default function GameScreen() {
         const previousScreen = screenRef.current;
         const nextScreen = getScreenLeft(previousScreen);
 
-        if (nextScreen !== null) {
+        if (nextScreen !== null && screenTransitionHoldRef.current <= 0) {
           nextX = STAGE_BOUNDS.maxX;
           screenRef.current = nextScreen;
           screenTransitionHoldRef.current = SCREEN_TRANSITION_HOLD_SECONDS;
@@ -286,7 +285,10 @@ export default function GameScreen() {
             col: previousScreen.col,
           };
 
-          if (nextScreen.row !== previousScreen.row) {
+          if (
+            nextScreen.row !== previousScreen.row &&
+            screenTransitionHoldRef.current <= 0
+          ) {
             screenRef.current = nextScreen;
             setScreen(nextScreen);
             nextY = STAGE_BOUNDS.bottomY - 8;
@@ -338,7 +340,7 @@ export default function GameScreen() {
               isGroundedRef.current = true;
               setIsGrounded(true);
               setIsJumping(false);
-            } else {
+            } else if (screenTransitionHoldRef.current <= 0) {
               screenRef.current = nextScreen;
               setScreen(nextScreen);
               nextY = 0;
@@ -506,14 +508,40 @@ export default function GameScreen() {
               transform: `translate(-50%, -100%) scaleX(${enemy.direction})`,
             }}
           >
-            <div className="relative h-full w-full overflow-hidden rounded-[35%_35%_18%_18%] border border-red-200/35 bg-black/0">
-              <Image
-                src={enemy.spriteSrc ?? "/dog_right.png"}
-                alt="敵"
-                fill
-                sizes="(min-width: 1024px) 5rem, 12vw"
-                className="object-contain"
-              />
+            <div className={`relative h-full w-full overflow-hidden rounded-[35%_35%_18%_18%] border border-red-200/35 bg-black/0 ${
+              enemy.frameSrcs ? "enemy-frame-anim" : ""
+            }`}>
+              {enemy.frameSrcs ? (
+                <>
+                  <div className="enemy-frame frame-a">
+                    <Image
+                      src={enemy.frameSrcs[0]}
+                      alt="敵"
+                      fill
+                      sizes="(min-width: 1024px) 5rem, 12vw"
+                      className="object-contain"
+                    />
+                  </div>
+                  <div className="enemy-frame frame-b">
+                    <Image
+                      src={enemy.frameSrcs[1]}
+                      alt="敵"
+                      fill
+                      sizes="(min-width: 1024px) 5rem, 12vw"
+                      className="object-contain"
+                    />
+                  </div>
+                </>
+              ) : (
+                <Image
+                  src={enemy.shootInterval ? "/bullet_enemy.png" : "/dog_right.png"}
+                  alt="敵"
+                  fill
+                  sizes="(min-width: 1024px) 5rem, 12vw"
+                  className="object-contain"
+                  style={enemy.shootInterval ? { transform: "scaleX(-1)" } : undefined}
+                />
+              )}
             </div>
           </div>
         ))}

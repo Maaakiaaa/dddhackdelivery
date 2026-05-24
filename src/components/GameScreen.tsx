@@ -839,11 +839,7 @@ if (createdBullets.length > 0) {
         ) : null}
 
         <div className="absolute left-4 top-4 z-20 hidden min-w-40 rounded-lg border border-white/10 bg-black/55 px-4 py-3 text-sm text-stone-100 shadow-[0_12px_32px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:block">
-          <p>位置: X {Math.round(player.x)} / Y {Math.round(player.y)}</p>
-          <p>画面: {screen.row},{screen.col}</p>
-          <p>
-            状態: {isGrounded ? "接地" : isJumping ? "ジャンプ中" : "落下中"}
-          </p>
+          <p>エリア: {screen.row},{screen.col}</p>
           <p>HP: {playerHP}</p>
         </div>
 

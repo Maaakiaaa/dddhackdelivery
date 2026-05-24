@@ -48,9 +48,9 @@ export default function GamePage() {
                 ストーリー
               </h1>
               <p className="max-w-2xl text-base leading-8 text-stone-300 sm:text-lg">
-                荷物を届けるために、ダンジョンに潜る<br />
-                素早く無事に届けることが、仕事の秘訣<br />
-                余裕があればまだ取られてないお宝も回収しよう
+                ショップに荷物を届けよう<br />
+                素早く無事に届けることが、高評価に繋がる<br />
+                余裕があればまだ見つかっていないお宝も回収しよう
               </p>
             </div>
           </div>

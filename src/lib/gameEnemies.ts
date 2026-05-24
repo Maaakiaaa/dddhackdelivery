@@ -1,3 +1,5 @@
+import { getPlatformLeft, getPlatformRight, getPlatformTop, type Platform } from "@/lib/gamePlatforms";
+
 export type EnemyPoint = {
   x: number;
   y: number;
@@ -19,10 +21,15 @@ export type Enemy = {
   direction: -1 | 1;
   width: number;
   height: number;
+  damage?: number;
+  frameSrcs?: [string, string];
+  shootInterval?: number;
+  initialShootDelay?: number;
+  movementType?: "patrol" | "chase";
 };
 
 const PLAYER_HITBOX = {
-  width: 4.2,
+  width: 4.6,
   height: 10,
 };
 
@@ -30,38 +37,531 @@ const BASE_ENEMIES: Enemy[] = [
   {
     id: "enemy-1-1-center",
     screen: { row: 1, col: 1 },
-    x: 39,
-    y: 45.2,
-    minX: 34,
-    maxX: 44,
+    x: 5,
+    y: 95,
+    minX: -50,
+    maxX: 593,
     speed: 5.5,
     direction: 1,
     width: 3.6,
     height: 4.8,
+    damage: 20,
+  },
+  {
+    id: "enemy-1-1-flyer",
+    screen: { row: 1, col: 1 },
+    x: 70,
+    y: 15,
+    minX: 16,
+    maxX: 78,
+    speed: 9,
+    direction: -1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+  },
+  {
+    id: "enemy-1-2-shooter",
+    screen: { row: 1, col: 2 },
+    x: 85,
+    y: 97,
+    minX: 85,
+    maxX: 85,
+    speed:0,
+    direction: -1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 2.9,
+  },
+  {
+    id: "enemy-1-3-shooter-1",
+    screen:{ row: 1, col: 3},
+    x: 30,
+    y: 95,
+    minX: 30,
+    maxX: 30,
+    speed: 0,
+    direction: 1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 3.9,
+  },
+  {
+    id: "enemy-1-3-shooter-2",
+    screen:{ row: 1, col: 3},
+    x: 90,
+    y: 64,
+    minX: 60,
+    maxX: 60,
+    speed: 0,
+    direction: -1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 4.8,
   },
   {
     id: "enemy-2-1-left",
     screen: { row: 2, col: 1 },
-    x: 13,
-    y: 42,
-    minX: 9,
-    maxX: 17,
+    x: 69,
+    y: 78,
+    minX: 0,
+    maxX: 65,
     speed: 4.8,
     direction: -1,
     width: 3.6,
     height: 4.8,
+    damage: 20,
   },
   {
-    id: "enemy-3-2-floor",
-    screen: { row: 3, col: 2 },
-    x: 48,
-    y: 94,
-    minX: 28,
-    maxX: 68,
+    id: "enemy-2-1-flyer_H",
+    screen: { row: 2, col: 1 },
+    x: 10,
+    y: 50,
+    minX: 25,
+    maxX: 58,
+    speed: 9,
+    direction: -1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    movementType: "chase",
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+  },
+  {
+    id: "enemy-2-2-flyer_H",
+    screen: { row: 2, col: 2 },
+    x: 10,
+    y: 20,
+    minX: 0,
+    maxX: 100,
+    speed: 6,
+    direction: -1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+    movementType: "chase",
+  },
+  {
+    id: "enemy-2-3-1",
+    screen: { row: 2, col: 3 },
+    x: 70,
+    y: 64,
+    minX: 70,
+    maxX: 100,
+    speed: 5.0,
+    direction: 1,
+    width: 3.6,
+    height: 4.8,
+    damage: 20,
+  },
+  {
+    id: "enemy-2-3-2",
+    screen: { row: 2, col: 3 },
+    x: 40,
+    y: 44,
+    minX: 30,
+    maxX: 54,
+    speed: 5.0,
+    direction: -1,
+    width: 3.6,
+    height: 4.8,
+    damage: 20,
+  },
+  {
+    id: "enemy-3-1-shooter",
+    screen: { row: 3, col: 1 },
+    x: 30,
+    y: 65,
+    minX: 40,
+    maxX: 60,
+    speed: 0,
+    direction: 1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 2.9,
+  },
+  {
+    id: "enemy-3-1-flyer_H-1",
+    screen: { row: 3, col: 1 },
+    x: 10,  
+    y: 20,
+    minX: 0,
+    maxX: 100,
+    speed: 6,
+    direction: -1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+    movementType: "chase",
+  },
+  {
+    id: "enemy-3-1-flyer_H-2",
+    screen: { row: 3, col: 1 },
+    x: 90,  
+    y: 90,
+    minX: 0,
+    maxX: 100,
     speed: 7,
+    direction: -1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+    movementType: "chase",
+  },
+  {
+    id: "enemy-3-2-1",
+    screen: { row: 3, col: 2 },
+    x: 56,
+    y: 35,
+    minX: 30,
+    maxX: 95,
+    speed: 7.0,
+    direction: 1,
+    width: 3.6,
+    height: 4.8,
+    damage: 20,
+  },
+  {
+    id: "enemy-3-2-2",
+    screen: { row: 3, col: 2 },
+    x: 5,
+    y: 95,
+    minX: 5,
+    maxX: 70,
+    speed: 15,
     direction: 1,
     width: 3.8,
-    height: 5,
+    height: 6,
+  },
+  {
+    id: "enemy-3-2-flyer",
+    screen: { row: 3, col: 2 },
+    x: 1,
+    y: 60,
+    minX: 1,
+    maxX: 27,
+    speed: 7,
+    direction: 1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+  },
+  {
+    id: "enemy-3-4-shooter-1",
+    screen: { row: 3, col: 4 },
+    x: 50,
+    y: 96,
+    minX: 60,
+    maxX: 60,
+    speed: 0,
+    direction: -1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 2.0,
+    initialShootDelay: 1.0,
+  },
+  {
+    id: "enemy-3-4-shooter-2",
+    screen: { row: 3, col: 4 },
+    x: 60,
+    y: 96,
+    minX: 60,
+    maxX: 60,
+    speed: 0,
+    direction: -1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 3.9,
+    initialShootDelay: 1.0,
+  },
+  {
+    id: "enemy-3-4-shooter-3",
+    screen: { row: 3, col: 4 },
+    x: 80,
+    y: 96,
+    minX: 60,
+    maxX: 60,
+    speed: 0,
+    direction: -1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 3.9,
+  },
+  {
+    id: "enemy-3-3-1",
+    screen: { row: 3, col: 3 },
+    x: 100, 
+    y: 96,
+    minX: 0,
+    maxX: 99,
+    speed: 7.0,
+    direction: 1,
+    width: 3.6,
+    height: 4.8,
+    damage: 20,
+  },
+   {
+    id: "enemy-3-3-2",
+    screen: { row: 3, col: 3 },
+    x: 80, 
+    y: 96,
+    minX: 0,
+    maxX: 99,
+    speed: 8.0,
+    direction: -1,
+    width: 3.6,
+    height: 4.8,
+    damage: 20,
+  },
+     {
+    id: "enemy-3-3-3",
+    screen: { row: 3, col: 3 },
+    x: 89, 
+    y: 96,
+    minX: 0,
+    maxX: 99,
+    speed: 3.0,
+    direction: -1,
+    width: 3.6,
+    height: 4.8,
+    damage: 20,
+  },
+  {
+    id: "enemy-3-3-4",
+    screen: { row: 3, col: 3 },
+    x: 99, 
+    y: 96,
+    minX: 0,
+    maxX: 99,
+    speed: 6.0,
+    direction: 1,
+    width: 3.6,
+    height: 4.8,
+    damage: 20,
+  },
+     {
+    id: "enemy-3-3-5",
+    screen: { row: 3, col: 3 },
+    x: 49, 
+    y: 96,
+    minX: 0,
+    maxX: 99,
+    speed: 5.0,
+    direction: 1,
+    width: 4.6,
+    height: 6.8,
+    damage: 20,
+  },
+      {
+    id: "enemy-3-3-6k",
+    screen: { row: 3, col: 3 },
+    x: 59, 
+    y: 96,
+    minX: 0,
+    maxX: 99,
+    speed: 4.0,
+    direction: 1,
+    width: 12.6,
+    height: 8.8,
+    damage: 30,
+  },
+  {
+    id :"enemy-3-5-flyer_H-1",
+    screen: { row: 3, col: 5},
+    x: 10,
+    y: 10,
+    minX: 0,
+    maxX: 100,
+    speed: 8,
+    direction: -1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+    movementType: "chase",
+  },
+  {
+    id :"enemy-3-5-flyer_H-2",
+    screen: { row: 3, col: 5},
+    x: 90,
+    y: 90,
+    minX: 0,
+    maxX: 100,
+    speed: 7,
+    direction: -1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+    movementType: "chase",
+  },
+    {
+    id :"enemy-3-5-flyer_H-3",
+    screen: { row: 3, col: 5 },
+    x: 50,
+    y: 50,
+    minX: 0,
+    maxX: 100,
+    speed: 7,
+    direction: 1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+    movementType: "chase",
+  },
+      {
+    id :"enemy-3-5-flyer_H-4",
+    screen: { row: 3, col: 5 },
+    x: 80,
+    y: 30,
+    minX: 0,
+    maxX: 100,
+    speed: 12,
+    direction: 1,
+    width: 6,
+    height: 3.5,
+    damage: 30,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+    movementType: "chase",
+  },
+  {
+    id: "enemy-4-1-shooter-1",
+    screen: { row: 4, col: 1 },
+    x: 85,
+    y: 96,
+    minX: 95,
+    maxX: 95,
+    speed: 0, 
+    direction: -1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 2.6,
+    initialShootDelay: 1.0,
+  },
+    {
+    id: "enemy-4-1-shooter-2",
+    screen: { row: 4, col: 1 },
+    x: 5,
+    y: 66,
+    minX: 95,
+    maxX: 95,
+    speed: 0, 
+    direction: 1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 3.0,
+  },
+  {
+    id: "enemy-4-2-1",
+    screen: { row: 4, col: 2 },
+    x: 2,
+    y: 94,
+    minX: 2,
+    maxX: 47,
+    speed: 6,
+    direction: 1,
+    width: 3.6,
+    height: 4.8,
+    damage: 20,
+  },
+  {
+    id : "enemy-4-2-2",
+    screen: { row: 4, col: 2 },
+    x: 65,
+    y: 71,
+    minX: 65,
+    maxX: 81,
+    speed: 6,
+    direction: 1,
+    width: 2.6,
+    height: 3.8,
+    damage: 10,
+  },
+  {
+    id : "enemy-5-1-shooter",
+    screen: { row: 5, col: 1 },
+    x: 10,
+    y: 96,
+    minX: 10,
+    maxX: 10,
+    speed: 0,
+    direction: 1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 1.6,
+    initialShootDelay: 2.0,
+  },
+  {
+    id : "enemy-5-2-shooter",
+    screen: { row: 5, col: 2 },
+    x: 90,  
+    y: 96,
+    minX: 90,
+    maxX: 90,
+    speed: 0,
+    direction: -1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 2.8,
+    initialShootDelay: 2.0,
+  },
+  {
+    id : "enemy-5-4-shooter",
+    screen: { row: 5, col: 4 },
+    x: 25,  
+    y: 36,
+    minX: 85,
+    maxX: 85,
+    speed: 0,
+    direction: 1,
+    width: 4.8,
+     height: 6.5,
+    damage: 10,
+    shootInterval: 0.3,
+    initialShootDelay: 4.0,
+  },
+  {
+    id : "enemy-5-4-1",
+    screen: { row: 5, col: 4 },
+    x: 30,
+    y: 96,
+    minX: 0,
+    maxX: 100,
+    speed: 9,
+    direction: 1,
+      width: 3.6,
+      height: 4.8,
+    damage: 20,
+  },
+   {
+    id : "enemy-5-4-2",
+    screen: { row: 5, col: 4 },
+    x: 100,
+    y: 96,
+    minX: 0,
+    maxX: 100,
+    speed: 2,
+    direction: 1,
+      width: 10.6,
+      height: 8.8,
+    damage: 30,
   },
 ];
 
@@ -88,6 +588,58 @@ function isOverlapping(
   );
 }
 
+function getEnemyRect(enemy: { x: number; y: number; width: number; height: number }) {
+  return {
+    left: enemy.x - enemy.width / 2,
+    right: enemy.x + enemy.width / 2,
+    top: enemy.y - enemy.height,
+    bottom: enemy.y,
+  };
+}
+
+function getPlatformRect(platform: Platform) {
+  return {
+    left: getPlatformLeft(platform),
+    right: getPlatformRight(platform),
+    top: getPlatformTop(platform),
+    bottom: platform.y + platform.size / 2,
+  };
+}
+
+function clampChasingEnemyToPlatforms(
+  enemy: Enemy,
+  nextX: number,
+  nextY: number,
+  activePlatforms: Platform[],
+) {
+  const currentRect = getEnemyRect(enemy);
+  let resolvedX = nextX;
+  let resolvedY = nextY;
+  let nextRect = getEnemyRect({ ...enemy, x: resolvedX, y: resolvedY });
+
+  for (const platform of activePlatforms) {
+    const platformRect = getPlatformRect(platform);
+
+    if (!isOverlapping(nextRect, platformRect)) {
+      continue;
+    }
+
+    if (currentRect.bottom <= platformRect.top && nextRect.bottom > platformRect.top) {
+      resolvedY = platformRect.top;
+    } else if (currentRect.top >= platformRect.bottom && nextRect.top < platformRect.bottom) {
+      resolvedY = platformRect.bottom + enemy.height;
+    } else if (currentRect.right <= platformRect.left && nextRect.right > platformRect.left) {
+      resolvedX = platformRect.left - enemy.width / 2;
+    } else if (currentRect.left >= platformRect.right && nextRect.left < platformRect.right) {
+      resolvedX = platformRect.right + enemy.width / 2;
+    }
+
+    nextRect = getEnemyRect({ ...enemy, x: resolvedX, y: resolvedY });
+  }
+
+  return { x: resolvedX, y: resolvedY };
+}
+
 export function getInitialEnemies() {
   return BASE_ENEMIES.map(cloneEnemy);
 }
@@ -99,8 +651,40 @@ export function getEnemiesForScreen(
   return enemies.filter((enemy) => isSameScreen(enemy.screen, screen));
 }
 
+export function getCollidingEnemy(
+  player: EnemyPoint,
+  enemies: Enemy[],
+  screen: EnemyScreenPosition,
+) {
+  const playerRect = {
+    left: player.x - PLAYER_HITBOX.width / 2,
+    right: player.x + PLAYER_HITBOX.width / 2,
+    top: player.y - PLAYER_HITBOX.height,
+    bottom: player.y,
+  };
+
+  return getEnemiesForScreen(enemies, screen).find((enemy) => {
+    const enemyRect = {
+      left: enemy.x - enemy.width / 2,
+      right: enemy.x + enemy.width / 2,
+      top: enemy.y - enemy.height,
+      bottom: enemy.y,
+    };
+
+    return isOverlapping(playerRect, enemyRect);
+  });
+}
+
 export function updateEnemies(enemies: Enemy[], deltaSeconds: number) {
   return enemies.map((enemy) => {
+    if (enemy.movementType === "chase") {
+      return enemy;
+    }
+
+    if (enemy.speed === 0 || enemy.minX === enemy.maxX) {
+      return enemy;
+    }
+
     let nextX = enemy.x + enemy.direction * enemy.speed * deltaSeconds;
     let nextDirection = enemy.direction;
 
@@ -120,26 +704,51 @@ export function updateEnemies(enemies: Enemy[], deltaSeconds: number) {
   });
 }
 
+export function getChasingEnemy(
+  enemy: Enemy,
+  player: EnemyPoint,
+  activePlatforms: Platform[],
+  deltaSeconds: number,
+) {
+  if (enemy.speed === 0 || enemy.minX === enemy.maxX) {
+    return enemy;
+  }
+
+  const targetX = Math.max(enemy.minX, Math.min(enemy.maxX, player.x));
+  const targetY = player.y;
+  const deltaX = targetX - enemy.x;
+  const deltaY = targetY - enemy.y;
+  const distance = Math.hypot(deltaX, deltaY);
+
+  if (distance === 0) {
+    return enemy;
+  }
+
+  const travel = Math.min(enemy.speed * deltaSeconds, distance);
+  const ratio = travel / distance;
+  const nextX = enemy.x + deltaX * ratio;
+  const nextY = enemy.y + deltaY * ratio;
+  const nextDirection: -1 | 1 = deltaX < 0 ? -1 : deltaX > 0 ? 1 : enemy.direction;
+
+  const resolved = clampChasingEnemyToPlatforms(
+    enemy,
+    nextX,
+    nextY,
+    activePlatforms,
+  );
+
+  return {
+    ...enemy,
+    x: resolved.x,
+    y: resolved.y,
+    direction: nextDirection,
+  };
+}
+
 export function isPlayerTouchingEnemy(
   player: EnemyPoint,
   enemies: Enemy[],
   screen: EnemyScreenPosition,
 ) {
-  const playerRect = {
-    left: player.x - PLAYER_HITBOX.width / 2,
-    right: player.x + PLAYER_HITBOX.width / 2,
-    top: player.y - PLAYER_HITBOX.height,
-    bottom: player.y,
-  };
-
-  return getEnemiesForScreen(enemies, screen).some((enemy) => {
-    const enemyRect = {
-      left: enemy.x - enemy.width / 2,
-      right: enemy.x + enemy.width / 2,
-      top: enemy.y - enemy.height,
-      bottom: enemy.y,
-    };
-
-    return isOverlapping(playerRect, enemyRect);
-  });
+  return Boolean(getCollidingEnemy(player, enemies, screen));
 }

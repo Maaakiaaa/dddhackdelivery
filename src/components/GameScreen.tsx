@@ -1,14 +1,50 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import GameTimer from "@/components/GameTimer";
+import ItemBag from "@/components/ItemBag";
+import ScoreRankingPanel from "@/components/ScoreRankingPanel";
+import StartSetupPanel from "@/components/StartSetupPanel";
+import {
+  DELIVERY_ITEMS,
+  INVENTORY_DISPLAY_ITEMS,
+  MAP_ITEM_PLACEMENTS,
+  type MapItemPlacement,
+} from "@/data/item-list";
+import type { ScoreResult } from "@/lib/ranking";
 import {
   getEnemiesForScreen,
   getInitialEnemies,
-  isPlayerTouchingEnemy,
+  getCollidingEnemy,
+  getChasingEnemy,
   updateEnemies,
   type Enemy,
 } from "@/lib/gameEnemies";
+import {
+  getMaxRow,
+  getMinRow,
+  getRoomBackground,
+  getScreenBelow,
+  getScreenLeft,
+  getScreenRight,
+  isGoalScreen,
+  isOnLadder,
+  LADDER_Y_RANGE,
+  shouldShowLadder,
+  START_SCREEN,
+  type ScreenPosition,
+} from "@/lib/gameMap";
+import {
+  findLandingPlatform,
+  findPlatformTopAtPoint,
+  getActivePlatforms,
+  getPlatformBlockCount,
+  getPlatformImageSrc,
+  getPlatformTop,
+  getPlatformVisualTop,
+  START_PLATFORM,
+} from "@/lib/gamePlatforms";
 
 type Point = {
   x: number;
@@ -16,17 +52,50 @@ type Point = {
 };
 
 type Direction = "left" | "right";
-type ScreenPosition = {
-  row: number;
-  col: number;
+
+type Bullet = {
+  id: string;
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  speed: number;
+  damage: number;
 };
 
+type InventoryCounts = Record<string, number>;
+
+type PickupItem = MapItemPlacement & {
+  size: number;
+};
+
+const STARTING_ITEM_COUNT_LIMIT = 3;
+const PICKUP_HEAL_AMOUNT = 50;
+const TIME_BONUS_LIMIT_SECONDS = 120;
+const TIME_BONUS_SCORE = 100;
+const BGM_SRC = "/bgm.mp3";
+const BGM_VOLUME = 0.45;
+const DAMAGE_SOUND_SRC = "/dame.mp3";
+const DAMAGE_SOUND_VOLUME = 0.8;
 const PLAYER_SPEED = 18;
+const BULLET_SPEED = 55;
+const BULLET_DAMAGE = 15;
+const BULLET_SIZE_PERCENT = 1.4;
+const BULLET_IMAGE_SRC = "/bullet.png";
+const DEFAULT_PICKUP_SIZE_PERCENT = 5;
+const PLAYER_HITBOX = {
+  width: 4.6,
+  height: 10,
+};
+const SHOOT_DIRECTION_VECTORS = [
+  { dx: 0.83, dy: -0.56 },
+  { dx: 1, dy: 0 },
+  { dx: 0.83, dy: 0.56 },
+] as const;
 const LADDER_CLIMB_SPEED = 24;
 const JUMP_VELOCITY = -100;
 const GRAVITY = 150;
 const MAX_FALL_SPEED = 56;
-const PLATFORM_SURFACE_OFFSET = 4.0;
 const SCREEN_TRANSITION_HOLD_SECONDS = 0.6;
 const STAGE_BOUNDS = {
   minX: 4,
@@ -34,182 +103,35 @@ const STAGE_BOUNDS = {
   topY: 4,
   bottomY: 95,
 };
-const LADDER_X_RANGE = {
-  min: 84,
-  max: 96,
-};
-const LADDER_Y_RANGE = {
-  min: 0,
-  max: 34,
-};
-const BOTTOM_FLOOR_VISUAL_OFFSET = 2;
-
-const platforms = [
-  { label: "開始地点", x: 13, y: 68, size: 4, blocks: 3 },
-  { label: "中央足場", x: 39, y: 51, size: 3.6, blocks: 3 },
-  { label: "岩棚", x: 57, y: 55, size: 3.6, blocks: 3 },
-  { label: "配達先", x: 69, y: 68, size: 4, blocks: 3 },
-  { label: "上層通路", x: 82, y: 33, size: 3.6, blocks: 3 },
-] as const;
-
-const block2Platforms = [
-  { label: "長い足場A", x: 31, y: 82, size: 4, blocks: 6, imageSrc: "/block2.png" },
-  { label: "長い足場B", x: 76, y: 48, size: 4, blocks: 6, imageSrc: "/block2.png" },
-] as const;
-
-const ladderBasePlatforms = [
-  { label: "はしご下足場", x: 90, y: 100, size: 4, blocks: 3 },
-] as const;
-
-const secondRowPlatforms = [
-  { label: "2段目左足場", x: 13, y: 48, size: 4, blocks: 3 },
-  { label: "2段目中央足場", x: 43, y: 70, size: 4, blocks: 4 },
-  { label: "2段目右足場", x: 78, y: 56, size: 4, blocks: 3 },
-  {
-    label: "2段目長い足場",
-    x: 58,
-    y: 86,
-    size: 4,
-    blocks: 6,
-    imageSrc: "/block2.png",
-  },
-] as const;
-
-const bottomFloorPlatforms = Array.from({ length: 24 }, (_, index) => ({
-  label: `下端ブロック${index + 1}`,
-  x: 2 + index * 4,
-  y: 100,
-  size: 4,
-}));
-
-type Platform = {
-  label: string;
-  x: number;
-  y: number;
-  size: number;
-  blocks?: number;
-  imageSrc?: string;
-};
-
-const START_PLATFORM = platforms[0];
 const START_POSITION: Point = {
   x: START_PLATFORM.x,
   y: getPlatformTop(START_PLATFORM),
 };
-const START_SCREEN: ScreenPosition = { row: 1, col: 1 };
+
+function getEmptyInventory() {
+  return DELIVERY_ITEMS.reduce<InventoryCounts>((inventory, item) => {
+    inventory[item.id] = 0;
+    return inventory;
+  }, {});
+}
+
+function cloneInventory(inventory: InventoryCounts) {
+  return DELIVERY_ITEMS.reduce<InventoryCounts>((nextInventory, item) => {
+    nextInventory[item.id] = inventory[item.id] ?? 0;
+    return nextInventory;
+  }, {});
+}
+
+function getInitialPickupItems() {
+  return MAP_ITEM_PLACEMENTS.map((item) => ({
+    ...item,
+    screen: { ...item.screen },
+    size: item.size ?? DEFAULT_PICKUP_SIZE_PERCENT,
+  }));
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
-}
-
-function isGoalScreen(screen: ScreenPosition) {
-  return screen.row === 3 && screen.col === 4;
-}
-
-function getMaxColForRow(row: number) {
-  return row === 3 ? 4 : 3;
-}
-
-function getRoomBackground(screen: ScreenPosition) {
-  return isGoalScreen(screen)
-    ? {
-        alt: "溶岩の光が差し込むゴールの洞窟",
-        src: "/goal.png",
-      }
-    : {
-        alt: "青く光る結晶がある洞窟の背景",
-        src: "/map.png",
-      };
-}
-
-function shouldShowLadder(screen: ScreenPosition) {
-  return screen.row >= 2 && screen.row <= 3 && screen.col <= 3;
-}
-
-function isOnLadder(point: Point, screen: ScreenPosition) {
-  return (
-    shouldShowLadder(screen) &&
-    point.x >= LADDER_X_RANGE.min &&
-    point.x <= LADDER_X_RANGE.max &&
-    point.y >= LADDER_Y_RANGE.min &&
-    point.y <= LADDER_Y_RANGE.max
-  );
-}
-
-function getPlatformTop(platform: Platform) {
-  return platform.y - platform.size / 2 - PLATFORM_SURFACE_OFFSET;
-}
-
-function getPlatformBlockCount(platform: Platform) {
-  return platform.blocks ?? 1;
-}
-
-function getPlatformImageSrc(platform: Platform) {
-  return platform.imageSrc ?? "/block.png";
-}
-
-function getPlatformVisualTop(platform: Platform) {
-  return platform.label.startsWith("下端ブロック")
-    ? platform.y + BOTTOM_FLOOR_VISUAL_OFFSET
-    : platform.y;
-}
-
-function getPlatformLeft(platform: Platform) {
-  return platform.x - (platform.size * getPlatformBlockCount(platform)) / 2;
-}
-
-function getPlatformRight(platform: Platform) {
-  return platform.x + (platform.size * getPlatformBlockCount(platform)) / 2;
-}
-
-function getActivePlatforms(screen: ScreenPosition) {
-  if (isGoalScreen(screen)) {
-    return [];
-  }
-
-  if (screen.row === 2) {
-    return [...secondRowPlatforms, ...ladderBasePlatforms];
-  }
-
-  return screen.row === 3
-    ? [
-        ...platforms,
-        ...block2Platforms,
-        ...bottomFloorPlatforms,
-      ]
-    : [...platforms, ...block2Platforms, ...ladderBasePlatforms];
-}
-
-function findPlatformTopAtPoint(point: Point, activePlatforms: Platform[]) {
-  return activePlatforms.find((platform) => {
-    const isOnTopEdge = Math.abs(point.y - getPlatformTop(platform)) < 0.4;
-
-    return (
-      isOnTopEdge &&
-      point.x >= getPlatformLeft(platform) &&
-      point.x <= getPlatformRight(platform)
-    );
-  });
-}
-
-function findLandingPlatform(
-  x: number,
-  fromY: number,
-  toY: number,
-  activePlatforms: Platform[],
-) {
-  return activePlatforms
-    .filter((platform) => {
-      const platformTop = getPlatformTop(platform);
-
-      return (
-        x >= getPlatformLeft(platform) &&
-        x <= getPlatformRight(platform) &&
-        platformTop >= fromY &&
-        platformTop <= toY
-      );
-    })
-    .sort((a, b) => getPlatformTop(a) - getPlatformTop(b))[0];
 }
 
 function isMovementKey(key: string) {
@@ -241,46 +163,218 @@ function getMovement(keys: Set<string>) {
 }
 
 export default function GameScreen() {
+  const [isGameStarted, setIsGameStarted] = useState(false);
+  const [gameRunId, setGameRunId] = useState(0);
+  const [playerName, setPlayerName] = useState("");
+  const [inventory, setInventory] = useState<InventoryCounts>(() =>
+    getEmptyInventory(),
+  );
+  const [draftInventory, setDraftInventory] = useState<InventoryCounts>(() =>
+    getEmptyInventory(),
+  );
+  const [pickupItems, setPickupItems] = useState<PickupItem[]>(() =>
+    getInitialPickupItems(),
+  );
   const [player, setPlayer] = useState<Point>(START_POSITION);
   const [facing, setFacing] = useState<Direction>("right");
   const [isMoving, setIsMoving] = useState(false);
   const [isJumping, setIsJumping] = useState(false);
   const [isGrounded, setIsGrounded] = useState(true);
   const [screen, setScreen] = useState<ScreenPosition>(START_SCREEN);
+  const [playerHP, setPlayerHP] = useState(100);
+  const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
+  const [isGameOver, setIsGameOver] = useState(false);
   const [enemies, setEnemies] = useState<Enemy[]>(() => getInitialEnemies());
+  const [bullets, setBullets] = useState<Bullet[]>([]);
   const [isEnemyContact, setIsEnemyContact] = useState(false);
   const roomBackground = getRoomBackground(screen);
   const visibleEnemies = getEnemiesForScreen(enemies, screen);
+  const visiblePickupItems = pickupItems.filter(
+    (item) => item.screen.row === screen.row && item.screen.col === screen.col,
+  );
   const pressedKeysRef = useRef(new Set<string>());
+  const bulletsRef = useRef<Bullet[]>([]);
+  const shootTimerRef = useRef(0);
+  const bulletIdCounterRef = useRef(0);
   const playerRef = useRef<Point>(START_POSITION);
   const enemiesRef = useRef<Enemy[]>(enemies);
+  const playerHPRef = useRef(100);
+  const enemyContactRef = useRef(false);
+  const isGameOverRef = useRef(false);
   const verticalVelocityRef = useRef(0);
   const isGroundedRef = useRef(true);
   const screenRef = useRef<ScreenPosition>(START_SCREEN);
   const screenTransitionHoldRef = useRef(0);
+  const inventoryRef = useRef<InventoryCounts>(getEmptyInventory());
+  const startingInventoryRef = useRef<InventoryCounts>(getEmptyInventory());
+  const pickupItemsRef = useRef<PickupItem[]>(getInitialPickupItems());
+  const enemyShootTimersRef = useRef<Record<string, number>>({});
+  const runStartedAtRef = useRef(0);
+  const scoreResultRef = useRef<ScoreResult | null>(null);
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+  const damageSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  function getBgm() {
+    if (bgmRef.current === null) {
+      const audio = new Audio(BGM_SRC);
+      audio.loop = true;
+      audio.volume = BGM_VOLUME;
+      bgmRef.current = audio;
+    }
+
+    return bgmRef.current;
+  }
+
+  function playBgm() {
+    const bgm = getBgm();
+    bgm.currentTime = 0;
+    void bgm.play().catch(() => {
+      // Browser autoplay policy may block audio if startGame is not user-initiated.
+    });
+  }
+
+  function stopBgm() {
+    if (bgmRef.current === null) {
+      return;
+    }
+
+    bgmRef.current.pause();
+    bgmRef.current.currentTime = 0;
+  }
+
+  function getDamageSound() {
+    if (damageSoundRef.current === null) {
+      const audio = new Audio(DAMAGE_SOUND_SRC);
+      audio.volume = DAMAGE_SOUND_VOLUME;
+      damageSoundRef.current = audio;
+    }
+
+    return damageSoundRef.current;
+  }
+
+  const playDamageSound = useCallback(() => {
+    const damageSound = getDamageSound();
+    damageSound.currentTime = 0;
+    void damageSound.play().catch(() => {});
+  }, []);
+
+  function finishScoreIfGoal(nextScreen: ScreenPosition, currentTime: number) {
+    if (!isGoalScreen(nextScreen) || scoreResultRef.current !== null) {
+      return;
+    }
+
+    const elapsedSeconds = Math.floor(
+      (currentTime - runStartedAtRef.current) / 1000,
+    );
+    const hpScore = playerHPRef.current;
+    const timeBonus =
+      elapsedSeconds <= TIME_BONUS_LIMIT_SECONDS ? TIME_BONUS_SCORE : 0;
+    const result = {
+      elapsedSeconds,
+      hpScore,
+      timeBonus,
+      total: hpScore + timeBonus,
+    };
+
+    scoreResultRef.current = result;
+    setScoreResult(result);
+  }
+
+  function updateDraftItemCount(itemId: string, delta: number) {
+    setDraftInventory((current) => ({
+      ...current,
+      [itemId]: clamp(
+        (current[itemId] ?? 0) + delta,
+        0,
+        STARTING_ITEM_COUNT_LIMIT,
+      ),
+    }));
+  }
+
+  function resetGame() {
+    const initialInventory = cloneInventory(startingInventoryRef.current);
+
+    pressedKeysRef.current.clear();
+    verticalVelocityRef.current = 0;
+    isGroundedRef.current = true;
+    screenTransitionHoldRef.current = 0;
+    enemyContactRef.current = false;
+    isGameOverRef.current = false;
+    scoreResultRef.current = null;
+    runStartedAtRef.current = performance.now();
+    bulletsRef.current = [];
+    shootTimerRef.current = 0;
+    bulletIdCounterRef.current = 0;
+    setIsMoving(false);
+    setIsJumping(false);
+    setIsGrounded(true);
+    setIsEnemyContact(false);
+    setIsGameOver(false);
+    setScoreResult(null);
+    screenRef.current = START_SCREEN;
+    playerRef.current = START_POSITION;
+    enemiesRef.current = getInitialEnemies();
+    pickupItemsRef.current = getInitialPickupItems();
+    inventoryRef.current = initialInventory;
+    playerHPRef.current = 100;
+    setScreen(START_SCREEN);
+    setFacing("right");
+    setPlayer(START_POSITION);
+    setPlayerHP(100);
+    setEnemies(enemiesRef.current);
+    setPickupItems(pickupItemsRef.current);
+    setInventory(initialInventory);
+    setBullets([]);
+    setGameRunId((current) => current + 1);
+  }
+
+  function startGame() {
+    const trimmedPlayerName = playerName.trim();
+
+    if (trimmedPlayerName.length === 0) {
+      return;
+    }
+
+    setPlayerName(trimmedPlayerName);
+    startingInventoryRef.current = cloneInventory(draftInventory);
+    resetGame();
+    setIsGameStarted(true);
+    playBgm();
+  }
+
+  function returnToItemSetup() {
+    setIsGameStarted(false);
+    setIsGameOver(false);
+    isGameOverRef.current = false;
+    stopBgm();
+  }
 
   useEffect(() => {
+    return () => {
+      if (bgmRef.current !== null) {
+        bgmRef.current.pause();
+        bgmRef.current.currentTime = 0;
+      }
+
+      if (damageSoundRef.current !== null) {
+        damageSoundRef.current.pause();
+        damageSoundRef.current.currentTime = 0;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isGameStarted) {
+      return;
+    }
+
     let animationFrameId = 0;
     let lastTime = performance.now();
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "r" || event.key === "R") {
         event.preventDefault();
-        pressedKeysRef.current.clear();
-        verticalVelocityRef.current = 0;
-        isGroundedRef.current = true;
-        screenTransitionHoldRef.current = 0;
-        setIsMoving(false);
-        setIsJumping(false);
-        setIsGrounded(true);
-        setIsEnemyContact(false);
-        screenRef.current = START_SCREEN;
-        playerRef.current = START_POSITION;
-        enemiesRef.current = getInitialEnemies();
-        setScreen(START_SCREEN);
-        setFacing("right");
-        setPlayer(START_POSITION);
-        setEnemies(enemiesRef.current);
+        resetGame();
         return;
       }
 
@@ -329,12 +423,105 @@ export default function GameScreen() {
           screenTransitionHoldRef.current - deltaSeconds,
           0,
         );
+      }
+
+      if (isGameOverRef.current) {
         animationFrameId = requestAnimationFrame(tick);
         return;
       }
 
       enemiesRef.current = updateEnemies(enemiesRef.current, deltaSeconds);
+      enemiesRef.current = enemiesRef.current.map((enemy) => {
+        if (enemy.movementType !== "chase") {
+          return enemy;
+        }
+
+        if (
+          enemy.screen.row !== screenRef.current.row ||
+          enemy.screen.col !== screenRef.current.col
+        ) {
+          return enemy;
+        }
+
+        return getChasingEnemy(
+          enemy,
+          playerRef.current,
+          getActivePlatforms(screenRef.current),
+          deltaSeconds,
+        );
+      });
       setEnemies(enemiesRef.current);
+
+      bulletsRef.current = bulletsRef.current
+        .map((bullet) => ({
+          ...bullet,
+          x: bullet.x + bullet.dx * bullet.speed * deltaSeconds,
+          y: bullet.y + bullet.dy * bullet.speed * deltaSeconds,
+        }))
+        .filter(
+          (bullet) =>
+            bullet.x >= 0 &&
+            bullet.x <= 100 &&
+            bullet.y >= 0 &&
+            bullet.y <= 100,
+        );
+      setBullets(bulletsRef.current);
+
+const shooters = enemiesRef.current.filter(
+  (enemy) =>
+    enemy.shootInterval &&
+    enemy.screen.row === screenRef.current.row &&
+    enemy.screen.col === screenRef.current.col,
+);
+
+const createdBullets: Bullet[] = [];
+
+for (const shooter of shooters) {
+const currentTimer =
+  enemyShootTimersRef.current[shooter.id] ??
+  shooter.initialShootDelay ??   // ← 個別設定があればそれを使う
+  0;                              // ← なければ0（即発射）
+  const nextTimer = currentTimer - deltaSeconds;
+
+  if (nextTimer <= 0) {
+    const baseId = bulletIdCounterRef.current++;
+
+    const bulletOrigin = {
+      x: shooter.x,
+      y: shooter.y - shooter.height * 0.5,
+    };
+
+    const directionSign = shooter.direction;
+
+    const newBullets = SHOOT_DIRECTION_VECTORS.map(
+      (direction, index) => ({
+        id: `bullet-${baseId}-${index}`,
+        x: bulletOrigin.x,
+        y: bulletOrigin.y,
+        dx: direction.dx * directionSign,
+        dy: direction.dy,
+        speed: BULLET_SPEED,
+        damage: BULLET_DAMAGE,
+      }),
+    );
+
+    createdBullets.push(...newBullets);
+
+    enemyShootTimersRef.current[shooter.id] =
+      shooter.shootInterval ?? 2.2;
+  } else {
+    enemyShootTimersRef.current[shooter.id] = nextTimer;
+  }
+}
+
+if (createdBullets.length > 0) {
+  bulletsRef.current = [
+    ...bulletsRef.current,
+    ...createdBullets,
+  ];
+
+  setBullets(bulletsRef.current);
+}
 
       const { climbY, dx } = getMovement(pressedKeysRef.current);
 
@@ -351,20 +538,14 @@ export default function GameScreen() {
 
       if (dx > 0 && rawNextX >= STAGE_BOUNDS.maxX) {
         const previousScreen = screenRef.current;
-        const nextScreen = {
-          row: previousScreen.row,
-          col: clamp(
-            previousScreen.col + 1,
-            1,
-            getMaxColForRow(previousScreen.row),
-          ),
-        };
+        const nextScreen = getScreenRight(previousScreen);
 
-        if (nextScreen.col !== previousScreen.col) {
+        if (nextScreen !== null && screenTransitionHoldRef.current <= 0) {
           nextX = STAGE_BOUNDS.minX;
           screenRef.current = nextScreen;
           screenTransitionHoldRef.current = SCREEN_TRANSITION_HOLD_SECONDS;
           setScreen(nextScreen);
+          finishScoreIfGoal(nextScreen, currentTime);
 
           const nextPlayer = { x: nextX, y: nextY };
           playerRef.current = nextPlayer;
@@ -377,16 +558,14 @@ export default function GameScreen() {
 
       if (dx < 0 && rawNextX <= STAGE_BOUNDS.minX) {
         const previousScreen = screenRef.current;
-        const nextScreen = {
-          row: previousScreen.row,
-          col: clamp(previousScreen.col - 1, 1, getMaxColForRow(previousScreen.row)),
-        };
+        const nextScreen = getScreenLeft(previousScreen);
 
-        if (nextScreen.col !== previousScreen.col) {
+        if (nextScreen !== null && screenTransitionHoldRef.current <= 0) {
           nextX = STAGE_BOUNDS.maxX;
           screenRef.current = nextScreen;
           screenTransitionHoldRef.current = SCREEN_TRANSITION_HOLD_SECONDS;
           setScreen(nextScreen);
+          finishScoreIfGoal(nextScreen, currentTime);
 
           const nextPlayer = { x: nextX, y: nextY };
           playerRef.current = nextPlayer;
@@ -423,15 +602,19 @@ export default function GameScreen() {
         if (climbY < 0 && nextY <= STAGE_BOUNDS.topY) {
           const previousScreen = screenRef.current;
           const nextScreen = {
-            row: clamp(previousScreen.row - 1, 1, 3),
+            row: clamp(previousScreen.row - 1, getMinRow(), getMaxRow()),
             col: previousScreen.col,
           };
 
-          if (nextScreen.row !== previousScreen.row) {
+          if (
+            nextScreen.row !== previousScreen.row &&
+            screenTransitionHoldRef.current <= 0
+          ) {
             screenRef.current = nextScreen;
             setScreen(nextScreen);
             nextY = STAGE_BOUNDS.bottomY - 8;
             screenTransitionHoldRef.current = SCREEN_TRANSITION_HOLD_SECONDS;
+            finishScoreIfGoal(nextScreen, currentTime);
           }
         }
       } else if (isGroundedRef.current && standingPlatform) {
@@ -462,28 +645,34 @@ export default function GameScreen() {
           isGroundedRef.current = true;
           setIsGrounded(true);
           setIsJumping(false);
-        } else if (nextY > STAGE_BOUNDS.bottomY) {
-          const previousScreen = screenRef.current;
-          const nextScreen = {
-            row: clamp(previousScreen.row + 1, 1, 3),
-            col: previousScreen.col,
-          };
-          screenRef.current = nextScreen;
-          setScreen(nextScreen);
+        } else {
+          const canMoveToScreenBelow = getScreenBelow(screenRef.current) !== null;
+          const bottomTransitionY =
+            activePlatforms.length === 0 && canMoveToScreenBelow
+              ? STAGE_BOUNDS.bottomY - 6
+              : STAGE_BOUNDS.bottomY;
 
-          if (nextScreen.row === previousScreen.row) {
-            nextY = STAGE_BOUNDS.bottomY;
-            verticalVelocityRef.current = 0;
-            isGroundedRef.current = true;
-            setIsGrounded(true);
-            setIsJumping(false);
-          } else {
-            nextY = 0;
-            verticalVelocityRef.current = MAX_FALL_SPEED;
-            isGroundedRef.current = false;
-            screenTransitionHoldRef.current = SCREEN_TRANSITION_HOLD_SECONDS;
-            setIsGrounded(false);
-            setIsJumping(false);
+          if (nextY >= bottomTransitionY) {
+            const previousScreen = screenRef.current;
+            const nextScreen = getScreenBelow(previousScreen);
+
+            if (nextScreen === null) {
+              nextY = STAGE_BOUNDS.bottomY;
+              verticalVelocityRef.current = 0;
+              isGroundedRef.current = true;
+              setIsGrounded(true);
+              setIsJumping(false);
+            } else if (screenTransitionHoldRef.current <= 0) {
+              screenRef.current = nextScreen;
+              setScreen(nextScreen);
+              nextY = 0;
+              verticalVelocityRef.current = MAX_FALL_SPEED;
+              isGroundedRef.current = false;
+              screenTransitionHoldRef.current = SCREEN_TRANSITION_HOLD_SECONDS;
+              setIsGrounded(false);
+              setIsJumping(false);
+              finishScoreIfGoal(nextScreen, currentTime);
+            }
           }
         }
       }
@@ -491,9 +680,112 @@ export default function GameScreen() {
       const nextPlayer = { x: nextX, y: nextY };
       playerRef.current = nextPlayer;
       setPlayer(nextPlayer);
-      setIsEnemyContact(
-        isPlayerTouchingEnemy(nextPlayer, enemiesRef.current, screenRef.current),
+
+      const playerRect = {
+        left: nextPlayer.x - PLAYER_HITBOX.width / 2,
+        right: nextPlayer.x + PLAYER_HITBOX.width / 2,
+        top: nextPlayer.y - PLAYER_HITBOX.height,
+        bottom: nextPlayer.y,
+      };
+
+      const pickupHit = pickupItemsRef.current.find((item) => {
+        if (
+          item.screen.row !== screenRef.current.row ||
+          item.screen.col !== screenRef.current.col
+        ) {
+          return false;
+        }
+
+        const halfSize = item.size / 2;
+        const itemRect = {
+          left: item.x - halfSize,
+          right: item.x + halfSize,
+          top: item.y - halfSize,
+          bottom: item.y + halfSize,
+        };
+
+        return (
+          itemRect.left < playerRect.right &&
+          itemRect.right > playerRect.left &&
+          itemRect.top < playerRect.bottom &&
+          itemRect.bottom > playerRect.top
+        );
+      });
+
+      if (pickupHit) {
+        const currentCount = inventoryRef.current[pickupHit.itemId] ?? 0;
+        const nextInventory = {
+          ...inventoryRef.current,
+          [pickupHit.itemId]: currentCount + 1,
+        };
+        const nextHP = playerHPRef.current + PICKUP_HEAL_AMOUNT;
+
+        inventoryRef.current = nextInventory;
+        playerHPRef.current = nextHP;
+        pickupItemsRef.current = pickupItemsRef.current.filter(
+          (item) => item.id !== pickupHit.id,
+        );
+        setInventory(nextInventory);
+        setPlayerHP(nextHP);
+        setPickupItems(pickupItemsRef.current);
+      }
+
+      const collidingEnemy = getCollidingEnemy(
+        nextPlayer,
+        enemiesRef.current,
+        screenRef.current,
       );
+      const contact = Boolean(collidingEnemy);
+
+      if (contact && !enemyContactRef.current && collidingEnemy) {
+        const damage = collidingEnemy.damage ?? 30;
+        const nextHP = Math.max(playerHPRef.current - damage, 0);
+        playerHPRef.current = nextHP;
+        setPlayerHP(nextHP);
+        playDamageSound();
+
+        if (nextHP === 0) {
+          isGameOverRef.current = true;
+          setIsGameOver(true);
+        }
+      }
+
+      const bulletHit = bulletsRef.current.find((bullet) => {
+        const halfSize = BULLET_SIZE_PERCENT / 2;
+        const bulletRect = {
+          left: bullet.x - halfSize,
+          right: bullet.x + halfSize,
+          top: bullet.y - halfSize,
+          bottom: bullet.y + halfSize,
+        };
+
+        return (
+          bulletRect.left < playerRect.right &&
+          bulletRect.right > playerRect.left &&
+          bulletRect.top < playerRect.bottom &&
+          bulletRect.bottom > playerRect.top
+        );
+      });
+
+      if (bulletHit) {
+        bulletsRef.current = bulletsRef.current.filter(
+          (bullet) => bullet.id !== bulletHit.id,
+        );
+        setBullets(bulletsRef.current);
+
+        const nextHP = Math.max(playerHPRef.current - bulletHit.damage, 0);
+        playerHPRef.current = nextHP;
+        setPlayerHP(nextHP);
+        playDamageSound();
+
+        if (nextHP === 0) {
+          isGameOverRef.current = true;
+          setIsGameOver(true);
+        }
+      }
+
+      enemyContactRef.current = contact;
+      setIsEnemyContact(contact);
 
       animationFrameId = requestAnimationFrame(tick);
     }
@@ -509,7 +801,12 @@ export default function GameScreen() {
       window.removeEventListener("blur", handleBlur);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [isGameStarted, playDamageSound]);
+
+  const totalDraftItems = DELIVERY_ITEMS.reduce(
+    (total, item) => total + (draftInventory[item.id] ?? 0),
+    0,
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -530,14 +827,25 @@ export default function GameScreen() {
 
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,transparent_36%,rgba(0,0,0,0.28)_100%)]" />
 
-        <div className="absolute left-4 top-4 z-20 min-w-40 rounded-lg border border-white/10 bg-black/55 px-4 py-3 text-sm text-stone-100 shadow-[0_12px_32px_rgba(0,0,0,0.35)] backdrop-blur-sm">
-          <p>位置: X {Math.round(player.x)} / Y {Math.round(player.y)}</p>
-          <p>画面: {screen.row},{screen.col}</p>
-          <p>
-            状態: {isGrounded ? "接地" : isJumping ? "ジャンプ中" : "落下中"}
-          </p>
-          <p>HP: 100</p>
+        {isGameStarted ? (
+          <>
+            <GameTimer key={gameRunId} className="bottom-4 left-4" />
+            <ItemBag
+              items={INVENTORY_DISPLAY_ITEMS}
+              inventory={inventory}
+              className="pointer-events-none absolute right-4 top-4 z-20 max-w-[18rem]"
+            />
+          </>
+        ) : null}
+
+        <div className="absolute left-4 top-4 z-20 hidden min-w-40 rounded-lg border border-white/10 bg-black/55 px-4 py-3 text-sm text-stone-100 shadow-[0_12px_32px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:block">
+          <p>エリア: {screen.row},{screen.col}</p>
+          <p>HP: {playerHP}</p>
         </div>
+
+        {scoreResult ? (
+          <ScoreRankingPanel playerName={playerName} scoreResult={scoreResult} />
+        ) : null}
 
         {shouldShowLadder(screen) ? (
           <div
@@ -608,6 +916,30 @@ export default function GameScreen() {
           ))}
         </div>
 
+        {visiblePickupItems.map((pickupItem) => (
+            <div
+              key={pickupItem.id}
+              aria-label={`${pickupItem.name}を拾う`}
+              className="pointer-events-none absolute z-10 rounded-md border border-amber-100/45 bg-black/35 shadow-[0_0_18px_rgba(226,199,137,0.45)]"
+              style={{
+                left: `${pickupItem.x}%`,
+                top: `${pickupItem.y}%`,
+                width: `${pickupItem.size}%`,
+                aspectRatio: "1 / 1",
+                transform: "translate(-50%, -50%)",
+              }}
+              title={pickupItem.name}
+            >
+              <Image
+                src={pickupItem.imageSrc}
+                alt={pickupItem.name}
+                fill
+                sizes="(min-width: 1024px) 4rem, 8vw"
+                className="rounded-md object-cover"
+              />
+            </div>
+        ))}
+
         {visibleEnemies.map((enemy) => (
           <div
             key={enemy.id}
@@ -616,17 +948,69 @@ export default function GameScreen() {
             style={{
               left: `${enemy.x}%`,
               top: `${enemy.y}%`,
-              width: `${enemy.width}%`,
-              height: `${enemy.height}%`,
+              width: `${enemy.width * 2.1}%`,
+              height: `${enemy.height * 2.1}%`,
               transform: `translate(-50%, -100%) scaleX(${enemy.direction})`,
             }}
           >
-            <div className="relative h-full w-full overflow-hidden rounded-[35%_35%_18%_18%] border border-red-200/35 bg-[radial-gradient(circle_at_42%_30%,#fecaca_0_10%,#dc2626_24%,#7f1d1d_76%)]">
-              <span className="absolute left-[24%] top-[30%] h-[16%] w-[16%] rounded-full bg-white" />
-              <span className="absolute right-[24%] top-[30%] h-[16%] w-[16%] rounded-full bg-white" />
-              <span className="absolute left-[29%] top-[36%] h-[7%] w-[7%] rounded-full bg-black" />
-              <span className="absolute right-[29%] top-[36%] h-[7%] w-[7%] rounded-full bg-black" />
+            <div className={`relative h-full w-full overflow-hidden rounded-[35%_35%_18%_18%] border border-red-200/35 bg-black/0 ${
+              enemy.frameSrcs ? "enemy-frame-anim" : ""
+            }`}>
+              {enemy.frameSrcs ? (
+                <>
+                  <div className="enemy-frame frame-a">
+                    <Image
+                      src={enemy.frameSrcs[0]}
+                      alt="敵"
+                      fill
+                      sizes="(min-width: 1024px) 5rem, 12vw"
+                      className="object-contain"
+                    />
+                  </div>
+                  <div className="enemy-frame frame-b">
+                    <Image
+                      src={enemy.frameSrcs[1]}
+                      alt="敵"
+                      fill
+                      sizes="(min-width: 1024px) 5rem, 12vw"
+                      className="object-contain"
+                    />
+                  </div>
+                </>
+              ) : (
+                <Image
+                  src={enemy.shootInterval ? "/bullet_enemy.png" : "/dog_right.png"}
+                  alt="敵"
+                  fill
+                  sizes="(min-width: 1024px) 5rem, 12vw"
+                  className="object-contain"
+                  style={enemy.shootInterval ? { transform: "scaleX(-1)" } : undefined}
+                />
+              )}
             </div>
+          </div>
+        ))}
+
+        {bullets.map((bullet) => (
+          <div
+            key={bullet.id}
+            aria-hidden="true"
+            className="pointer-events-none absolute z-20"
+            style={{
+              left: `${bullet.x}%`,
+              top: `${bullet.y}%`,
+              width: `${BULLET_SIZE_PERCENT}%`,
+              height: `${BULLET_SIZE_PERCENT}%`,
+              transform: "translate(-50%, -50%)",
+            }}
+          >
+            <Image
+              src={BULLET_IMAGE_SRC}
+              alt="弾丸"
+              fill
+              sizes="4rem"
+              className="object-contain scale-[3]"
+            />
           </div>
         ))}
 
@@ -667,6 +1051,49 @@ export default function GameScreen() {
             />
           </div>
         </div>
+
+        {!isGameStarted ? (
+          <StartSetupPanel
+            items={DELIVERY_ITEMS}
+            inventory={draftInventory}
+            itemLimit={STARTING_ITEM_COUNT_LIMIT}
+            playerName={playerName}
+            totalItems={totalDraftItems}
+            onPlayerNameChange={setPlayerName}
+            onResetItems={() => setDraftInventory(getEmptyInventory())}
+            onStart={startGame}
+            onUpdateItemCount={updateDraftItemCount}
+          />
+        ) : null}
+
+        {isGameOver ? (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 px-6 py-4 text-center">
+            <div className="w-full max-w-lg rounded-[1.75rem] border border-white/10 bg-slate-950/95 p-10 shadow-[0_32px_80px_rgba(0,0,0,0.65)]">
+              <p className="text-sm font-semibold uppercase tracking-[0.35em] text-pink-300">
+                GAME OVER
+              </p>
+              <h2 className="mt-6 text-5xl font-semibold text-white">ゲームオーバー</h2>
+              <p className="mt-4 text-base leading-7 text-stone-300">
+                HPが0になりました。再挑戦するには以下のボタンを押してください。
+              </p>
+              <button
+                type="button"
+                onClick={resetGame}
+                className="mt-8 inline-flex rounded-full bg-[var(--accent)] px-7 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-400"
+              >
+                もう一度挑戦する
+              </button>
+              <button
+                type="button"
+                onClick={returnToItemSetup}
+                className="mt-3 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-7 py-3 text-sm font-semibold text-stone-100 transition hover:border-[var(--accent)]"
+              >
+                所持数を変更する
+              </button>
+              <p className="mt-4 text-xs text-stone-500">Rキーでもリスタートできます。</p>
+            </div>
+          </div>
+        ) : null}
       </section>
 
     </div>

@@ -410,11 +410,10 @@ const shooters = enemiesRef.current.filter(
 const createdBullets: Bullet[] = [];
 
 for (const shooter of shooters) {
-  const currentTimer =
-    enemyShootTimersRef.current[shooter.id] ??
-    shooter.shootInterval ??
-    2.2;
-
+const currentTimer =
+  enemyShootTimersRef.current[shooter.id] ??
+  shooter.initialShootDelay ??   // ← 個別設定があればそれを使う
+  0;                              // ← なければ0（即発射）
   const nextTimer = currentTimer - deltaSeconds;
 
   if (nextTimer <= 0) {

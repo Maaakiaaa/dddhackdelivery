@@ -3,6 +3,12 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import GameTimer from "@/components/GameTimer";
+import ItemBag from "@/components/ItemBag";
+import {
+  DELIVERY_ITEMS,
+  MAP_ITEM_PLACEMENTS,
+  type MapItemPlacement,
+} from "@/data/item-list";
 import {
   getEnemiesForScreen,
   getInitialEnemies,
@@ -52,11 +58,20 @@ type Bullet = {
   damage: number;
 };
 
+type InventoryCounts = Record<string, number>;
+
+type PickupItem = MapItemPlacement & {
+  size: number;
+};
+
+const STARTING_ITEM_COUNT_LIMIT = 3;
+const PICKUP_HEAL_AMOUNT = 50;
 const PLAYER_SPEED = 18;
 const BULLET_SPEED = 55;
 const BULLET_DAMAGE = 15;
 const BULLET_SIZE_PERCENT = 1.4;
 const BULLET_IMAGE_SRC = "/bullet.png";
+const DEFAULT_PICKUP_SIZE_PERCENT = 5;
 const PLAYER_HITBOX = {
   width: 4.6,
   height: 10,
@@ -81,6 +96,28 @@ const START_POSITION: Point = {
   x: START_PLATFORM.x,
   y: getPlatformTop(START_PLATFORM),
 };
+
+function getEmptyInventory() {
+  return DELIVERY_ITEMS.reduce<InventoryCounts>((inventory, item) => {
+    inventory[item.id] = 0;
+    return inventory;
+  }, {});
+}
+
+function cloneInventory(inventory: InventoryCounts) {
+  return DELIVERY_ITEMS.reduce<InventoryCounts>((nextInventory, item) => {
+    nextInventory[item.id] = inventory[item.id] ?? 0;
+    return nextInventory;
+  }, {});
+}
+
+function getInitialPickupItems() {
+  return MAP_ITEM_PLACEMENTS.map((item) => ({
+    ...item,
+    screen: { ...item.screen },
+    size: item.size ?? DEFAULT_PICKUP_SIZE_PERCENT,
+  }));
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -116,6 +153,17 @@ function getMovement(keys: Set<string>) {
 }
 
 export default function GameScreen() {
+  const [isGameStarted, setIsGameStarted] = useState(false);
+  const [gameRunId, setGameRunId] = useState(0);
+  const [inventory, setInventory] = useState<InventoryCounts>(() =>
+    getEmptyInventory(),
+  );
+  const [draftInventory, setDraftInventory] = useState<InventoryCounts>(() =>
+    getEmptyInventory(),
+  );
+  const [pickupItems, setPickupItems] = useState<PickupItem[]>(() =>
+    getInitialPickupItems(),
+  );
   const [player, setPlayer] = useState<Point>(START_POSITION);
   const [facing, setFacing] = useState<Direction>("right");
   const [isMoving, setIsMoving] = useState(false);
@@ -129,6 +177,9 @@ export default function GameScreen() {
   const [isEnemyContact, setIsEnemyContact] = useState(false);
   const roomBackground = getRoomBackground(screen);
   const visibleEnemies = getEnemiesForScreen(enemies, screen);
+  const visiblePickupItems = pickupItems.filter(
+    (item) => item.screen.row === screen.row && item.screen.col === screen.col,
+  );
   const pressedKeysRef = useRef(new Set<string>());
   const bulletsRef = useRef<Bullet[]>([]);
   const shootTimerRef = useRef(0);
@@ -142,8 +193,24 @@ export default function GameScreen() {
   const isGroundedRef = useRef(true);
   const screenRef = useRef<ScreenPosition>(START_SCREEN);
   const screenTransitionHoldRef = useRef(0);
+  const inventoryRef = useRef<InventoryCounts>(getEmptyInventory());
+  const startingInventoryRef = useRef<InventoryCounts>(getEmptyInventory());
+  const pickupItemsRef = useRef<PickupItem[]>(getInitialPickupItems());
+
+  function updateDraftItemCount(itemId: string, delta: number) {
+    setDraftInventory((current) => ({
+      ...current,
+      [itemId]: clamp(
+        (current[itemId] ?? 0) + delta,
+        0,
+        STARTING_ITEM_COUNT_LIMIT,
+      ),
+    }));
+  }
 
   function resetGame() {
+    const initialInventory = cloneInventory(startingInventoryRef.current);
+
     pressedKeysRef.current.clear();
     verticalVelocityRef.current = 0;
     isGroundedRef.current = true;
@@ -161,16 +228,37 @@ export default function GameScreen() {
     screenRef.current = START_SCREEN;
     playerRef.current = START_POSITION;
     enemiesRef.current = getInitialEnemies();
+    pickupItemsRef.current = getInitialPickupItems();
+    inventoryRef.current = initialInventory;
     playerHPRef.current = 100;
     setScreen(START_SCREEN);
     setFacing("right");
     setPlayer(START_POSITION);
     setPlayerHP(100);
     setEnemies(enemiesRef.current);
+    setPickupItems(pickupItemsRef.current);
+    setInventory(initialInventory);
     setBullets([]);
+    setGameRunId((current) => current + 1);
+  }
+
+  function startGame() {
+    startingInventoryRef.current = cloneInventory(draftInventory);
+    resetGame();
+    setIsGameStarted(true);
+  }
+
+  function returnToItemSetup() {
+    setIsGameStarted(false);
+    setIsGameOver(false);
+    isGameOverRef.current = false;
   }
 
   useEffect(() => {
+    if (!isGameStarted) {
+      return;
+    }
+
     let animationFrameId = 0;
     let lastTime = performance.now();
 
@@ -470,6 +558,48 @@ export default function GameScreen() {
         bottom: nextPlayer.y,
       };
 
+      const pickupHit = pickupItemsRef.current.find((item) => {
+        if (
+          item.screen.row !== screenRef.current.row ||
+          item.screen.col !== screenRef.current.col
+        ) {
+          return false;
+        }
+
+        const halfSize = item.size / 2;
+        const itemRect = {
+          left: item.x - halfSize,
+          right: item.x + halfSize,
+          top: item.y - halfSize,
+          bottom: item.y + halfSize,
+        };
+
+        return (
+          itemRect.left < playerRect.right &&
+          itemRect.right > playerRect.left &&
+          itemRect.top < playerRect.bottom &&
+          itemRect.bottom > playerRect.top
+        );
+      });
+
+      if (pickupHit) {
+        const currentCount = inventoryRef.current[pickupHit.itemId] ?? 0;
+        const nextInventory = {
+          ...inventoryRef.current,
+          [pickupHit.itemId]: currentCount + 1,
+        };
+        const nextHP = playerHPRef.current + PICKUP_HEAL_AMOUNT;
+
+        inventoryRef.current = nextInventory;
+        playerHPRef.current = nextHP;
+        pickupItemsRef.current = pickupItemsRef.current.filter(
+          (item) => item.id !== pickupHit.id,
+        );
+        setInventory(nextInventory);
+        setPlayerHP(nextHP);
+        setPickupItems(pickupItemsRef.current);
+      }
+
       const collidingEnemy = getCollidingEnemy(
         nextPlayer,
         enemiesRef.current,
@@ -539,7 +669,12 @@ export default function GameScreen() {
       window.removeEventListener("blur", handleBlur);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [isGameStarted]);
+
+  const totalDraftItems = DELIVERY_ITEMS.reduce(
+    (total, item) => total + (draftInventory[item.id] ?? 0),
+    0,
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -560,9 +695,18 @@ export default function GameScreen() {
 
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,transparent_36%,rgba(0,0,0,0.28)_100%)]" />
 
-        <GameTimer />
+        {isGameStarted ? (
+          <>
+            <GameTimer key={gameRunId} className="bottom-4 left-4" />
+            <ItemBag
+              items={DELIVERY_ITEMS}
+              inventory={inventory}
+              className="pointer-events-none absolute right-4 top-4 z-20 max-w-[18rem]"
+            />
+          </>
+        ) : null}
 
-        <div className="absolute left-4 top-4 z-20 min-w-40 rounded-lg border border-white/10 bg-black/55 px-4 py-3 text-sm text-stone-100 shadow-[0_12px_32px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+        <div className="absolute left-4 top-4 z-20 hidden min-w-40 rounded-lg border border-white/10 bg-black/55 px-4 py-3 text-sm text-stone-100 shadow-[0_12px_32px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:block">
           <p>位置: X {Math.round(player.x)} / Y {Math.round(player.y)}</p>
           <p>画面: {screen.row},{screen.col}</p>
           <p>
@@ -639,6 +783,40 @@ export default function GameScreen() {
             </div>
           ))}
         </div>
+
+        {visiblePickupItems.map((pickupItem) => {
+          const item = DELIVERY_ITEMS.find(
+            (deliveryItem) => deliveryItem.id === pickupItem.itemId,
+          );
+
+          if (item === undefined) {
+            return null;
+          }
+
+          return (
+            <div
+              key={pickupItem.id}
+              aria-label={`${item.name}を拾う`}
+              className="pointer-events-none absolute z-10 rounded-md border border-amber-100/45 bg-black/35 shadow-[0_0_18px_rgba(226,199,137,0.45)]"
+              style={{
+                left: `${pickupItem.x}%`,
+                top: `${pickupItem.y}%`,
+                width: `${pickupItem.size}%`,
+                aspectRatio: "1 / 1",
+                transform: "translate(-50%, -50%)",
+              }}
+              title={item.name}
+            >
+              <Image
+                src={item.imageSrc}
+                alt={item.name}
+                fill
+                sizes="(min-width: 1024px) 4rem, 8vw"
+                className="rounded-md object-cover"
+              />
+            </div>
+          );
+        })}
 
         {visibleEnemies.map((enemy) => (
           <div
@@ -752,6 +930,99 @@ export default function GameScreen() {
           </div>
         </div>
 
+        {!isGameStarted ? (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/80 px-4 py-5">
+            <div className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-[0_32px_90px_rgba(0,0,0,0.7)]">
+              <div className="flex shrink-0 flex-col gap-3 border-b border-white/10 px-5 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-7">
+                <div>
+                  <p className="text-xs font-semibold tracking-[0.28em] text-[var(--accent)]">
+                    INVENTORY SETUP
+                  </p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">
+                    持っていくアイテムを選択
+                  </h2>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-stone-200">
+                  合計 {totalDraftItems} 個
+                </div>
+              </div>
+
+              <div className="min-h-0 overflow-y-auto px-5 py-5 sm:px-7">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {DELIVERY_ITEMS.map((item) => {
+                    const count = draftInventory[item.id] ?? 0;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="grid grid-cols-[4rem_1fr_auto] items-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] p-3"
+                      >
+                        <div className="relative h-16 w-16 overflow-hidden rounded-md border border-white/10 bg-black">
+                          <Image
+                            src={item.imageSrc}
+                            alt={item.name}
+                            fill
+                            sizes="4rem"
+                            className="object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-stone-100">
+                            {item.name}
+                          </p>
+                          <p className="mt-1 text-xs text-stone-400">
+                            {STARTING_ITEM_COUNT_LIMIT}個まで所持可能
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            aria-label={`${item.name}を減らす`}
+                            onClick={() => updateDraftItemCount(item.id, -1)}
+                            className="grid h-8 w-8 place-items-center rounded-md border border-white/10 bg-black/40 text-lg leading-none text-stone-100 transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-35"
+                            disabled={count === 0}
+                          >
+                            -
+                          </button>
+                          <span className="w-6 text-center font-mono text-lg font-bold text-white">
+                            {count}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`${item.name}を増やす`}
+                            onClick={() => updateDraftItemCount(item.id, 1)}
+                            className="grid h-8 w-8 place-items-center rounded-md border border-white/10 bg-black/40 text-lg leading-none text-stone-100 transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-35"
+                            disabled={count === STARTING_ITEM_COUNT_LIMIT}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex shrink-0 flex-col gap-3 border-t border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+                <button
+                  type="button"
+                  onClick={() => setDraftInventory(getEmptyInventory())}
+                  className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-stone-200 transition hover:border-[var(--accent)]"
+                >
+                  リセット
+                </button>
+                <button
+                  type="button"
+                  onClick={startGame}
+                  className="rounded-lg bg-[var(--accent)] px-7 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-400"
+                >
+                  この所持数で開始
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {isGameOver ? (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 px-6 py-4 text-center">
             <div className="w-full max-w-lg rounded-[1.75rem] border border-white/10 bg-slate-950/95 p-10 shadow-[0_32px_80px_rgba(0,0,0,0.65)]">
@@ -768,6 +1039,13 @@ export default function GameScreen() {
                 className="mt-8 inline-flex rounded-full bg-[var(--accent)] px-7 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-400"
               >
                 もう一度挑戦する
+              </button>
+              <button
+                type="button"
+                onClick={returnToItemSetup}
+                className="mt-3 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-7 py-3 text-sm font-semibold text-stone-100 transition hover:border-[var(--accent)]"
+              >
+                所持数を変更する
               </button>
               <p className="mt-4 text-xs text-stone-500">Rキーでもリスタートできます。</p>
             </div>

@@ -43,14 +43,13 @@ export default function GamePage() {
           <div className="space-y-6">
             <div className="flex flex-wrap items-center gap-3 text-sm text-stone-400">
               <span className="rounded-full border border-amber-100/15 bg-amber-100/5 px-4 py-1 tracking-[0.2em] text-[var(--accent)]">
-                ゲーム説明
+                ゲーム概要
               </span>
-              <span>プロトタイプ版</span>
             </div>
 
             <div className="space-y-5">
               <p className="text-sm tracking-[0.35em] text-stone-400">
-                DUNGEON DELIVERY
+                ダンジョンデリバリー
               </p>
               <h1 className="max-w-4xl text-5xl font-semibold leading-tight text-[var(--foreground)] sm:text-6xl lg:text-5xl">
                 ストーリー

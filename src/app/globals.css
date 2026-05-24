@@ -141,3 +141,27 @@ button {
     opacity: 1;
   }
 }
+
+@keyframes enemy-frame-flap {
+  0%, 49.99% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.enemy-frame-anim {
+  position: relative;
+}
+
+.enemy-frame-anim .enemy-frame {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.08s linear;
+}
+
+.enemy-frame-anim .enemy-frame.frame-a {
+  animation: enemy-frame-flap 0.8s steps(1,end) infinite;
+}
+
+.enemy-frame-anim .enemy-frame.frame-b {
+  animation: enemy-frame-flap 0.8s steps(1,end) infinite reverse;
+}

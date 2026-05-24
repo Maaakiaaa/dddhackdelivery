@@ -1,3 +1,5 @@
+import { getPlatformLeft, getPlatformRight, getPlatformTop, type Platform } from "@/lib/gamePlatforms";
+
 export type EnemyPoint = {
   x: number;
   y: number;
@@ -20,7 +22,9 @@ export type Enemy = {
   width: number;
   height: number;
   damage?: number;
-  spriteSrc?: string;
+  frameSrcs?: [string, string];
+  shootInterval?: number;
+  movementType?: "patrol" | "chase";
 };
 
 const PLAYER_HITBOX = {
@@ -54,7 +58,36 @@ const BASE_ENEMIES: Enemy[] = [
     width: 5,
     height: 7.5,
     damage: 15,
-    spriteSrc:"/flying_donkey_left.png",
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+  },
+  {
+    id: "enemy-1-1-shooter",
+    screen: { row: 1, col: 1 },
+    x: 55,
+    y: 50.5,
+    minX: 55,
+    maxX: 55,
+    speed: 0,
+    direction: -1,
+    width: 4.8,
+    height: 6.5,
+    damage: 10,
+    shootInterval: 2.2,
+  },
+  {
+    id: "enemy-1-2-flyer_H",
+    screen: { row: 1, col: 2 },
+    x: 62,
+    y: 20,
+    minX: 15,
+    maxX: 85,
+    speed: 6,
+    direction: -1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+    movementType: "chase",
   },
   {
     id: "enemy-2-1-left",
@@ -70,10 +103,24 @@ const BASE_ENEMIES: Enemy[] = [
     damage: 30,
   },
   {
+    id: "enemy-2-1-flyer1",
+    screen: { row: 2, col: 1 },
+    x: 10,
+    y: 50,
+    minX: 25,
+    maxX: 58,
+    speed: 9,
+    direction: -1,
+    width: 5,
+    height: 7.5,
+    damage: 15,
+    frameSrcs: ["/flying_donkey_left.png", "/fre2.png"],
+  },
+  {
     id: "enemy-3-2-floor",
-    screen: { row: 3, col: 2 },
+    screen: { row: 5, col: 2 },
     x: 48,
-    y: 94,
+    y: 98,
     minX: 0,
     maxX: 100,
     speed: 7,
@@ -104,6 +151,58 @@ function isOverlapping(
     a.top < b.bottom &&
     a.bottom > b.top
   );
+}
+
+function getEnemyRect(enemy: { x: number; y: number; width: number; height: number }) {
+  return {
+    left: enemy.x - enemy.width / 2,
+    right: enemy.x + enemy.width / 2,
+    top: enemy.y - enemy.height,
+    bottom: enemy.y,
+  };
+}
+
+function getPlatformRect(platform: Platform) {
+  return {
+    left: getPlatformLeft(platform),
+    right: getPlatformRight(platform),
+    top: getPlatformTop(platform),
+    bottom: platform.y + platform.size / 2,
+  };
+}
+
+function clampChasingEnemyToPlatforms(
+  enemy: Enemy,
+  nextX: number,
+  nextY: number,
+  activePlatforms: Platform[],
+) {
+  const currentRect = getEnemyRect(enemy);
+  let resolvedX = nextX;
+  let resolvedY = nextY;
+  let nextRect = getEnemyRect({ ...enemy, x: resolvedX, y: resolvedY });
+
+  for (const platform of activePlatforms) {
+    const platformRect = getPlatformRect(platform);
+
+    if (!isOverlapping(nextRect, platformRect)) {
+      continue;
+    }
+
+    if (currentRect.bottom <= platformRect.top && nextRect.bottom > platformRect.top) {
+      resolvedY = platformRect.top;
+    } else if (currentRect.top >= platformRect.bottom && nextRect.top < platformRect.bottom) {
+      resolvedY = platformRect.bottom + enemy.height;
+    } else if (currentRect.right <= platformRect.left && nextRect.right > platformRect.left) {
+      resolvedX = platformRect.left - enemy.width / 2;
+    } else if (currentRect.left >= platformRect.right && nextRect.left < platformRect.right) {
+      resolvedX = platformRect.right + enemy.width / 2;
+    }
+
+    nextRect = getEnemyRect({ ...enemy, x: resolvedX, y: resolvedY });
+  }
+
+  return { x: resolvedX, y: resolvedY };
 }
 
 export function getInitialEnemies() {
@@ -143,6 +242,14 @@ export function getCollidingEnemy(
 
 export function updateEnemies(enemies: Enemy[], deltaSeconds: number) {
   return enemies.map((enemy) => {
+    if (enemy.movementType === "chase") {
+      return enemy;
+    }
+
+    if (enemy.speed === 0 || enemy.minX === enemy.maxX) {
+      return enemy;
+    }
+
     let nextX = enemy.x + enemy.direction * enemy.speed * deltaSeconds;
     let nextDirection = enemy.direction;
 
@@ -160,6 +267,47 @@ export function updateEnemies(enemies: Enemy[], deltaSeconds: number) {
       direction: nextDirection,
     };
   });
+}
+
+export function getChasingEnemy(
+  enemy: Enemy,
+  player: EnemyPoint,
+  activePlatforms: Platform[],
+  deltaSeconds: number,
+) {
+  if (enemy.speed === 0 || enemy.minX === enemy.maxX) {
+    return enemy;
+  }
+
+  const targetX = Math.max(enemy.minX, Math.min(enemy.maxX, player.x));
+  const targetY = player.y;
+  const deltaX = targetX - enemy.x;
+  const deltaY = targetY - enemy.y;
+  const distance = Math.hypot(deltaX, deltaY);
+
+  if (distance === 0) {
+    return enemy;
+  }
+
+  const travel = Math.min(enemy.speed * deltaSeconds, distance);
+  const ratio = travel / distance;
+  let nextX = enemy.x + deltaX * ratio;
+  let nextY = enemy.y + deltaY * ratio;
+  const nextDirection: -1 | 1 = deltaX < 0 ? -1 : deltaX > 0 ? 1 : enemy.direction;
+
+  const resolved = clampChasingEnemyToPlatforms(
+    enemy,
+    nextX,
+    nextY,
+    activePlatforms,
+  );
+
+  return {
+    ...enemy,
+    x: resolved.x,
+    y: resolved.y,
+    direction: nextDirection,
+  };
 }
 
 export function isPlayerTouchingEnemy(

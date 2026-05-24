@@ -242,27 +242,27 @@ const platforms = [
       screenCols: [1],
     }),
   ),
-  ...Array.from({ length: 24 }, (_, index) =>
+  ...Array.from({ length: 25 }, (_, index) =>
     createPlatform({
-      label: `screen-3-3-bottom-floor-platform-${index + 1}`,
+      label: `screen-3-bottom-floor-platform-${index + 1}`,
       x: 2 + index * 4,
       y: 100,
       size: 4,
       screenRows: [3],
-      screenCols: [1, 3],
+      screenCols: [1, 3, 4, 5],
     }),
   ),
-    ...Array.from({ length: 24 }, (_, index) =>
+  ...Array.from({ length: 24 }, (_, index) =>
     createPlatform({
-      label: `screen-4-1-bottom-floor-platform-${index + 1}`,
+      label: `screen-4-1-left-floor-platform-${index + 1}`,
       x: 2 + index * 4,
-      y: 100,
+      y: 70,
       size: 4,
       screenRows: [4],
       screenCols: [1],
     }),
   ),
-    ...Array.from({ length: 24 }, (_, index) =>
+  ...Array.from({ length: 8 }, (_, index) =>
     createPlatform({
       label: `screen-4-2-bottom-floor-platform-${index + 1}`,
       x: 2 + index * 4,
@@ -272,34 +272,94 @@ const platforms = [
       screenCols: [2],
     }),
   ),
-    ...Array.from({ length: 24 }, (_, index) =>
+  ...Array.from({ length: 8 }, (_, index) =>
     createPlatform({
-      label: `screen-4-2-center-floor-platform-${index + 1}`,
+      label: `screen-4-3-left-floor-platform-${index + 1}`,
+      x: 2 + index * 4,
+      y: 60,
+      size: 4,
+      screenRows: [4],
+      screenCols: [3],
+    }),
+  ),
+    ...Array.from({ length: 25 }, (_, index) =>
+    createPlatform({
+      label: `screen-5-1-bottom-floor-platform-${index + 1}`,
       x: 2 + index * 4,
       y: 100,
       size: 4,
-      screenRows: [4],
+      screenRows: [5],
+      screenCols: [1, 2, 3, 4, 5, 6],
+    }),
+  ),
+    ...Array.from({ length: 4 }, (_, index) =>
+    createPlatform({
+      label: `screen-5-1-left-floor-platform-${index + 1}`,
+      x: 30 + index * 4,
+      y: 70,
+      size: 4,
+      screenRows: [5],
+      screenCols: [1],
+    }),
+  ),
+    ...Array.from({ length: 4 }, (_, index) =>
+    createPlatform({
+      label: `screen-5-1-right-floor-platform-${index + 1}`,
+      x: 50 + index * 4,
+      y: 40,
+      size: 4,
+      screenRows: [5],
+      screenCols: [1],
+    }),
+  ),
+    ...Array.from({ length: 4 }, (_, index) =>
+    createPlatform({
+      label: `screen-5-2-right-floor-platform-${index + 1}`,
+      x: 90 + index * 4,
+      y: 30,
+      size: 4,
+      screenRows: [5],
       screenCols: [2],
     }),
   ),
-    ...Array.from({ length: 24 }, (_, index) =>
+    ...Array.from({ length: 8 }, (_, index) =>
     createPlatform({
-      label: `screen-4-2-top-floor-platform-${index + 1}`,
-      x: 2 + index * 4,
-      y: 100,
+      label: `screen-5-3-left-floor-platform-${index + 1}`,
+      x: 1 + index * 4,
+      y: 40,
       size: 4,
-      screenRows: [4],
-      screenCols: [2],
+      screenRows: [5],
+      screenCols: [3],
     }),
   ),
-    ...Array.from({ length: 24 }, (_, index) =>
+    ...Array.from({ length: 8 }, (_, index) =>
     createPlatform({
-      label: `screen-4-2--floor-platform-${index + 1}`,
-      x: 2 + index * 4,
-      y: 100,
+      label: `screen-5-4-left-floor-platform-${index + 1}`,
+      x: 1 + index * 4,
+      y: 40,
       size: 4,
-      screenRows: [4],
-      screenCols: [2],
+      screenRows: [5],
+      screenCols: [4],
+    }),
+  ),
+     ...Array.from({ length: 8 }, (_, index) =>
+    createPlatform({
+      label: `screen-5-4-right-floor-platform-${index + 1}`,
+      x: 50 + index * 4,
+      y: 70,
+      size: 4,
+      screenRows: [5],
+      screenCols: [4],
+    }),
+  ),
+     ...Array.from({ length: 8 }, (_, index) =>
+    createPlatform({
+      label: `screen-5-5-right-floor-platform-${index + 1}`,
+      x: 70 + index * 4,
+      y: 50,
+      size: 4,
+      screenRows: [5],
+      screenCols: [5],
     }),
   ),
 ];

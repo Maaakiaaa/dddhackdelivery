@@ -291,8 +291,8 @@ export function getChasingEnemy(
 
   const travel = Math.min(enemy.speed * deltaSeconds, distance);
   const ratio = travel / distance;
-  let nextX = enemy.x + deltaX * ratio;
-  let nextY = enemy.y + deltaY * ratio;
+  const nextX = enemy.x + deltaX * ratio;
+  const nextY = enemy.y + deltaY * ratio;
   const nextDirection: -1 | 1 = deltaX < 0 ? -1 : deltaX > 0 ? 1 : enemy.direction;
 
   const resolved = clampChasingEnemyToPlatforms(
